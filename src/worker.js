@@ -3,6 +3,7 @@ import {
   workerData
 } from 'worker_threads';
 import { ethers } from 'ethers';
+import { exec } from 'child_process';
 import 'isomorphic-fetch';
 import { createRequire } from 'module';
 const require = createRequire(import.meta.url);
@@ -10,113 +11,176 @@ import fs from 'fs';
 require('dotenv').config();
 const { keccak256 } = require("@ethersproject/solidity");
 
-const chains = {
-	"ethereum": [
-		"https://rpc.ankr.com/eth",
-		"https://eth-rpc.gateway.pokt.network",
-		`https://eth-mainnet.g.alchemy.com/v2/${process.env.ALCHEMY_KEY_MAINNET}`
-	],
-	"gnosis":   [ "https://rpc.ankr.com/gnosis"  ],
-	"polygon":  [ "https://rpc.ankr.com/polygon"  ],
-	"arbitrum": [ "https://rpc.ankr.com/arbitrum"  ],
-	"goerli":   [
-		"https://rpc.ankr.com/eth_goerli",
-		`https://eth-goerli.g.alchemy.com/v2/${process.env.ALCHEMY_KEY_GOERLI}`
-	]
-};
-const ttl = 600;
-const headers = {
-	"Allow": "GET",
-	"Content-Type": "application/json",
-	"Access-Control-Allow-Origin": "*"
-};
-
-const mainnet = new ethers.providers.AlchemyProvider("homestead", process.env.ALCHEMY_KEY_MAINNET);
-const goerli = new ethers.providers.AlchemyProvider("goerli", process.env.ALCHEMY_KEY_GOERLI)
 const types = [
 	'name',
 	'addr',
 	'contenthash',
-	'avatar'
-]
+	'avatar',
+	'revision'
+] 
+const EMPTY_STRING = {};
+for (const key of types) {
+	EMPTY_STRING[key] = '';
+}
+const EMPTY_BOOL = {};
+for (const key of types) {
+	EMPTY_BOOL[key] = false;
+}
 
 async function handleCall(url, request, env) {
+	const mainnet = env ? new ethers.providers.AlchemyProvider("homestead", env.ALCHEMY_KEY_MAINNET) : '';
+	const goerli = env ? new ethers.providers.AlchemyProvider("goerli", env.ALCHEMY_KEY_GOERLI) : '';
 	let paths = url.toLowerCase().split('/');
-	let nature = paths[paths.length]
+	let nature = paths[paths.length - 1]
+	let ens = request.ens;
+	let chain = request.chain;
+	let caip10 = 'eip155-' + chain + '-' + ens
+	let signature = request.signature;
+	let address = request.address;
 	if (nature === 'read') {
 		let response = {
-			type: nature,
-			name: '',
-			addr: '',
-			contenthash: '',
-			avatar: ''
+			...EMPTY_STRING,
+			type: nature
 		}
-		let ens = request.body.ens;
-		let recordType = request.body.recordType;
-		let recordValue = request.body.recordValue;
-		if (recordType === recordValue === 'all') {
-			for (i = 0; i < 4; i++) {
-				fs.readFile(`/root/ccip2-data/${ens}/${types[i]}.json`, function (err, data) {
-					var cache = JSON.parse(data)
-					if (i === 0) {
-						response.name = cache.data
-					} else if (i === 1) {
-						response.addr = cache.data
-					} else if (i === 2) {
-						response.contenthash = cache.data
-					} else if (i === 3) {
-						response.avatar = cache.data
-					}
-				})
+		let recordsTypes = request.recordsTypes;
+		let recordsValues = request.recordsValues;
+		if (recordsTypes === 'all' && recordsValues === 'all') {
+			let promises = [];
+			for (let i = 0; i < 4; i++) {
+				if (fs.existsSync(`/root/ccip2-data/${caip10}/${types[i]}.json`)) {
+					let promise = new Promise((resolve, reject) => {
+						fs.readFile(`/root/ccip2-data/${caip10}/${types[i]}.json`, function (err, data) {
+							if (err) {
+								reject(err);
+							} else {
+								var cache = JSON.parse(data)
+								resolve(
+									{ 
+										type: types[i], 
+										data: cache.data 
+									}
+								);
+							}
+						})
+					});
+					promises.push(promise);
+				}
 			}
-			return response
+			let results = await Promise.all(promises);
+			results.forEach(result => {
+				response[result.type] = result.data;
+			});
+			console.log('Worker Read Response:', response)
+			return JSON.stringify(response);
 		} else {
 			/* Do nothing */
 		}
-	} else if (nature == 'write') {
+	} else if (nature === 'write') {
 		let response = {
+			...EMPTY_STRING,
 			type: nature,
-			name: 'no-request',
-			addr: 'no-request',
-			contenthash: 'no-request',
-			avatar: 'no-request'
+			ipfs: '',
+			ipns: '',
+			meta: EMPTY_BOOL
 		}
-		let signature = request.body.signature;
-		let ens = request.body.ens;
-		let address = request.body.address;
-		let ipns = request.body.ipns;
-		let recordType = request.body.recordType;
-		let recordValue = request.body.recordValue;
-		fs.writeFile(`/root/ccip2-data/${ens}/${recordType}.json`, JSON.stringify(
-			{
-				data: recordValue
-			}
-		))
-		let command = `ipfs add /root/ccip2-data/${ens}/${recordType}.json`;
-		var yourscript = exec(command, (error, stdout, stderr) => {
-			if (error !== null) {
-				/* handle error */
-			} else {
-				const ipfsCid = 'ipfs://' + stdout.split(' ')[1];
-				if (recordType === 'name') {
-					response.name = ipfsCid
-				} else if (recordType === 'addr') {
-					response.addr = ipfsCid
-				} else if (recordType === 'avatar') {
-					response.contenthash = ipfsCid
-				} else if (recordType === 'contenthash') {
-					response.avatar = ipfsCid
+		let ipns = request.ipns;
+		// @TODO: Signature record
+		let recordsTypes = request.recordsTypes;
+		let recordsValues = request.recordsValues;
+		let promises = []
+		for (let i = 0; i < recordsTypes.length; i++) {
+			let promise = new Promise((resolve, reject) => {
+				if (!fs.existsSync(`/root/ccip2-data/${caip10}/`)) {
+					fs.mkdirSync(`/root/ccip2-data/${caip10}/`);
 				}
-			}
+				fs.writeFile(`/root/ccip2-data/${caip10}/${recordsTypes[i]}.json`, 
+					JSON.stringify(
+						{
+							data: recordsValues[recordsTypes[i]],
+							timetamp: Date.now(),
+							signer: address,
+							domain: ens,
+							signature: signature
+						}
+					), (err) => {
+						if (err) {
+							reject(err);
+						} else {
+							response.meta[recordsTypes[i]] = true
+							response[recordsTypes[i]] = recordsValues[recordsTypes[i]]
+							resolve()
+						}
+					}
+				)
+			});
+			promises.push(promise);
+		}
+		await Promise.all([promises]);
+		let command = `ipfs add -r /root/ccip2-data/${caip10}`;
+		let ipfsCid;
+		let pinIpfs = new Promise((resolve, reject) => {
+			exec(command, (error, stdout, stderr) => {
+				if (error !== null) {
+					console.log('Fatal Error During Record Writing:', stderr)
+					reject(error)
+				} else {
+					ipfsCid = stdout.split(' ')[1];
+					response[recordsTypes] = recordsValues[recordsTypes]
+					response.ipfs = 'ipfs://' + ipfsCid
+					resolve()
+					//let pinCmd = `ipfs pin add ${stdout.split(' ')[1]} && ipfs pin add ${ipns}`;
+				}
+			})
 		})
-		return response
+		await Promise.all([pinIpfs]);
+		let pinIpns = new Promise((resolve, reject) => {
+			let pinCmd = `ipfs pin add ${ipfsCid}`;
+			exec(pinCmd, (error, stdout, stderr) => {
+				if (error !== null) {
+					console.log('Fatal Error During IPNS Pinning:', stderr)
+					reject(error)
+				} else {
+					response.ipns = 'ipns://' + ipns
+					console.log('Successfully Pinned:', ipns)
+					resolve()
+				}
+			})
+		})
+		await Promise.all([pinIpns])
+		return JSON.stringify(response)
+	} else if (nature === 'revision') {
+		let response = {
+			status: false
+		}
+		let revision = request.revision;
+		let promise = new Promise((resolve, reject) => {
+			fs.writeFile(`/root/ccip2-data/${caip10}/revision.json`, 
+				JSON.stringify(
+					{
+						data: revision,
+						timetamp: Date.now(),
+						signer: address,
+						domain: ens,
+						signature: signature 
+					}
+				), (err) => {
+					if (err) {
+						reject(err);
+					} else {
+						resolve()
+						response.status = true
+					}
+				}
+			)
+		});
+		await Promise.all([promise])
+		return JSON.stringify(response)
 	}
 }
 
-
 const url = workerData.url;
 const request = JSON.parse(workerData.body);
-const env = JSON.parse(workerData.env);
+const env = workerData.env;
 const res = await handleCall(url, request, env);
 let callback  = res;
-parentPort.postMessage(JSON.stringify(callback));
+parentPort.postMessage(callback);
