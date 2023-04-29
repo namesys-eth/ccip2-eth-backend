@@ -10,6 +10,8 @@ const require = createRequire(import.meta.url);
 import fs from 'fs';
 require('dotenv').config();
 const { keccak256 } = require("@ethersproject/solidity");
+const process = require('process');
+const mysql = require('mysql');
 
 const types = [
 	'name',
@@ -27,9 +29,24 @@ for (const key of types) {
 	EMPTY_BOOL[key] = false;
 }
 
-async function handleCall(url, request, env) {
-	const mainnet = env ? new ethers.providers.AlchemyProvider("homestead", env.ALCHEMY_KEY_MAINNET) : '';
-	const goerli = env ? new ethers.providers.AlchemyProvider("goerli", env.ALCHEMY_KEY_GOERLI) : '';
+const connection = mysql.createConnection({
+	host: process.env.MYSQL_HOST,
+	user: process.env.MYSQL_USER,
+	password: process.env.MYSQL_PASSWORD,
+	database: process.env.MYSQL_DATABASE
+});
+
+connection.connect((err) => {
+	if (err) {
+		console.error('Error connecting to MySQL database:', err.stack);
+		return;
+	}
+	console.log('Connected to MySQL database as ID:', connection.threadId);
+});
+
+async function handleCall(url, request) {
+	//const mainnet = new ethers.providers.AlchemyProvider("homestead", process.env.ALCHEMY_KEY_MAINNET)
+	const goerli = new ethers.providers.AlchemyProvider("goerli", process.env.ALCHEMY_KEY_GOERLI)
 	let paths = url.toLowerCase().split('/');
 	let nature = paths[paths.length - 1]
 	let ens = request.ens;
@@ -70,7 +87,7 @@ async function handleCall(url, request, env) {
 			results.forEach(result => {
 				response[result.type] = result.data;
 			});
-			console.log('Worker Read Response:', response)
+			//console.log('Worker Read Response:', response)
 			return JSON.stringify(response);
 		} else {
 			/* Do nothing */
@@ -142,7 +159,16 @@ async function handleCall(url, request, env) {
 				} else {
 					response.ipns = 'ipns://' + ipns
 					console.log('Successfully Pinned:', ipns)
-					resolve()
+					console.log('Making Database Entry...')
+					connection.query(
+						'INSERT INTO events (ens, timestamp, ipfs, ipns, meta) VALUES (?, ?, ?, ?, ?)',
+						[ens, Date.now(), response.ipfs, response.ipns, JSON.stringify(response.meta)], 
+						(error, results, fields) => {
+						if (error) {
+							console.error('Error executing database query:', error);
+						}
+						resolve()
+					})
 				}
 			})
 		})
@@ -180,7 +206,6 @@ async function handleCall(url, request, env) {
 
 const url = workerData.url;
 const request = JSON.parse(workerData.body);
-const env = workerData.env;
-const res = await handleCall(url, request, env);
+const res = await handleCall(url, request);
 let callback  = res;
 parentPort.postMessage(callback);
