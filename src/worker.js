@@ -13,11 +13,30 @@ const { keccak256 } = require("@ethersproject/solidity");
 const process = require('process');
 const mysql = require('mysql');
 
+function sumValues(obj) {
+	let total = 0;
+	for (const key in obj) {
+	  if (obj.hasOwnProperty(key)) {
+		total += obj[key];
+	  }
+	}
+	return total;
+  }
+
 const types = [
 	'name',
 	'addr',
 	'contenthash',
 	'avatar',
+	'zonehash',
+	'revision'
+] 
+const files = [
+	'name',
+	'_address/60',
+	'contenthash',
+	'text/avatar',
+	'_dnsrecord/zonehash',
 	'revision'
 ] 
 const EMPTY_STRING = {};
@@ -49,11 +68,42 @@ async function handleCall(url, request) {
 	const goerli = new ethers.providers.AlchemyProvider("goerli", process.env.ALCHEMY_KEY_GOERLI)
 	let paths = url.toLowerCase().split('/');
 	let nature = paths[paths.length - 1]
+	// @dev: if gas call
+	if (nature === 'gas') {
+		let response = {
+			gas: '0'
+		}
+		let promises = []
+		let promise = new Promise((resolve, reject) => { 
+			connection.query('SELECT gas FROM events', function (error, results, fields) {
+				if (error) {
+					console.error('Error reading gas from database:', error);
+					return;
+				}
+				const _values = results.map(row => row['gas']);
+				const _sum = _values.reduce((acc, val) => acc + parseFloat(val), 0);
+				resolve(
+					{ 
+						type: 'gas', 
+						data: _sum.toString()
+					}
+				);
+			});
+		})
+		promises.push(promise);
+		let results = await Promise.all(promises);
+		results.forEach(result => {
+			response[result.type] = result.data;
+		});
+		return JSON.stringify(response)
+	}
+	// @dev : remaining calls
 	let ens = request.ens;
 	let chain = request.chain;
 	let caip10 = 'eip155-' + chain + '-' + ens
 	let signature = request.signature;
 	let address = request.address;
+	let writePath = '.well-known/' + ens.split(".").reverse().join("/")
 	if (nature === 'read') {
 		let response = {
 			...EMPTY_STRING,
@@ -64,9 +114,9 @@ async function handleCall(url, request) {
 		if (recordsTypes === 'all' && recordsValues === 'all') {
 			let promises = [];
 			for (let i = 0; i < 4; i++) {
-				if (fs.existsSync(`/root/ccip2-data/${caip10}/${types[i]}.json`)) {
+				if (fs.existsSync(`/root/ccip2-data/${caip10}/${writePath}/${files[i]}.json`)) {
 					let promise = new Promise((resolve, reject) => {
-						fs.readFile(`/root/ccip2-data/${caip10}/${types[i]}.json`, function (err, data) {
+						fs.readFile(`/root/ccip2-data/${caip10}/${writePath}/${files[i]}.json`, function (err, data) {
 							if (err) {
 								reject(err);
 							} else {
@@ -105,12 +155,24 @@ async function handleCall(url, request) {
 		let recordsTypes = request.recordsTypes;
 		let recordsValues = request.recordsValues;
 		let promises = []
+		let recordsFiles = recordsTypes;
 		for (let i = 0; i < recordsTypes.length; i++) {
+			// Set filenames for non-standard records
+			if (recordsTypes[i] === 'addr') {
+				recordsFiles[i] = '_address/60';
+			} else if (recordsTypes[i] === 'zonehash') {
+				recordsFiles[i] = '_dnsrecord/zonehash';
+			} else if (recordsTypes[i] === 'avatar') {
+				recordsFiles[i] = 'text/avatar';
+			} else {
+				recordsFiles[i] = recordsTypes[i]
+			}
 			let promise = new Promise((resolve, reject) => {
-				if (!fs.existsSync(`/root/ccip2-data/${caip10}/`)) {
-					fs.mkdirSync(`/root/ccip2-data/${caip10}/`);
+				if (!fs.existsSync(`/root/ccip2-data/${caip10}/${writePath}/`)) {
+					fs.mkdirSync(`/root/ccip2-data/${caip10}/${writePath}/`);
 				}
-				fs.writeFile(`/root/ccip2-data/${caip10}/${recordsTypes[i]}.json`, 
+				fs.writeFile(`/root/ccip2-data/${caip10}/${writePath}/${recordsFiles[i]}.json`, 
+					// TODO - encode response with signature
 					JSON.stringify(
 						{
 							data: recordsValues[recordsTypes[i]],
@@ -161,11 +223,11 @@ async function handleCall(url, request) {
 					console.log('Successfully Pinned:', ipns)
 					console.log('Making Database Entry...')
 					connection.query(
-						'INSERT INTO events (ens, timestamp, ipfs, ipns, meta) VALUES (?, ?, ?, ?, ?)',
-						[ens, Date.now(), response.ipfs, response.ipns, JSON.stringify(response.meta)], 
+						'INSERT INTO events (ens, timestamp, ipfs, ipns, revision, gas, meta) VALUES (?, ?, ?, ?, ?, ?, ?)',
+						[ens, Date.now(), response.ipfs, response.ipns, '0x0', '0', JSON.stringify(response.meta)], 
 						(error, results, fields) => {
 						if (error) {
-							console.error('Error executing database query:', error);
+							console.error('Error executing database entry:', error);
 						}
 						resolve()
 					})
@@ -179,22 +241,48 @@ async function handleCall(url, request) {
 			status: false
 		}
 		let revision = request.revision;
+		let version = JSON.parse(request.version.replace('\\',''));
+		let gas = JSON.parse(request.gas)
 		let promise = new Promise((resolve, reject) => {
+			// Decoded version metadata utilised by NameSys
 			fs.writeFile(`/root/ccip2-data/${caip10}/revision.json`, 
 				JSON.stringify(
 					{
 						data: revision,
-						timetamp: Date.now(),
+						timestamp: Date.now(),
 						signer: address,
 						domain: ens,
-						signature: signature 
+						signature: signature,
+						gas: sumValues(gas).toPrecision(3)
 					}
 				), (err) => {
 					if (err) {
 						reject(err);
 					} else {
-						resolve()
+						console.log('Making Database Revision...')
+						let _revision = new Uint8Array(Object.values(revision)).toString('utf-8')
+						connection.query(
+							`UPDATE events SET revision = ?, gas = ? WHERE ens = ? AND revision = '0x0' AND gas = '0'`,
+							[_revision, sumValues(gas).toPrecision(3).toString(), ens], 
+							(error, results, fields) => {
+							if (error) {
+								console.error('Error executing database revision:', error);
+							}
+						})
+					}
+				}
+			)
+			// Encoded version metadata required by W3Name to republish IPNS records
+			fs.writeFile(`/root/ccip2-data/${caip10}/version.json`, 
+				JSON.stringify(
+					version
+				), (err) => {
+					if (err) {
+						reject(err);
+					} else {
+						console.log('Making Version File...')
 						response.status = true
+						resolve()
 					}
 				}
 			)
@@ -208,4 +296,5 @@ const url = workerData.url;
 const request = JSON.parse(workerData.body);
 const res = await handleCall(url, request);
 let callback  = res;
+connection.end();
 parentPort.postMessage(callback);

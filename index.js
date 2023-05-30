@@ -22,7 +22,8 @@ app.use(
       origin: [
          "http://localhost:3000",
          "https://ccip2.eth.limo",
-         "https://namesys-eth.github.io"
+         "https://namesys-eth.github.io",
+         "https://namesys.eth.limo"
       ],
       headers: [
       'Content-Type',
@@ -30,6 +31,17 @@ app.use(
     }
   )
 );
+
+const CREATE_TABLE= `CREATE TABLE events (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  ens VARCHAR(255) NOT NULL,
+  timestamp BIGINT NOT NULL,
+  ipfs VARCHAR(255) NOT NULL,
+  ipns VARCHAR(255) NOT NULL,
+  revision VARCHAR(1023) NOT NULL,
+  gas VARCHAR(127) NOT NULL,
+  meta JSON NOT NULL
+);`
 
 const options = {
 	 key: fs.readFileSync('/root/.ssl/sshmatrix.club.key'),
@@ -39,6 +51,7 @@ const options = {
 
 const root = '/root/ccip2';
 const abi = ethers.utils.defaultAbiCoder;
+const routes = ['/read', '/write', '/revision', '/gas']
 
 function errorHandler(err, req, res, next) {
   if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
@@ -57,17 +70,18 @@ app.get('/ping', async function (request, response) {
 	response.end('ccip2.eth backend is running in ' + root + ' on port ' + PORT + '\n');
 });
 
-app.route(['/read', '/write', '/revision'])
+app.route(routes)
   .post(async function (request, response) {
     response.header("Access-Control-Allow-Origin",
       "http://localhost:3000",
       "https://ccip2.eth.limo",
-      "https://namesys-eth.github.io"
+      "https://namesys-eth.github.io",
+      "https://namesys.eth.limo"
     );
     let paths = request.url.toLowerCase().split('/');
     let nature = paths[paths.length - 1]
     console.log(`Handling ${nature.toUpperCase()} Request...`)
-    if (!request.body || Object.keys(request.body).length === 0 || !['read', 'write', 'revision'].includes(nature)) {
+    if (!request.body || Object.keys(request.body).length === 0 || !routes.includes('/' + nature)) {
       response.end(`Forbidden Empty ${nature.toUpperCase()} Request\n`);
     } else {
       console.log(`Parsing Legit ${nature.toUpperCase()} Request...`)
