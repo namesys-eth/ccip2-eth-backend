@@ -12,6 +12,20 @@ require('dotenv').config();
 const { keccak256 } = require("@ethersproject/solidity");
 const process = require('process');
 const mysql = require('mysql');
+const path = require('path');
+
+// Safely make directories recursively; 'mkdir -p a/b/c' equivalent
+function mkdirpSync(directoryPath) {
+	const parts = directoryPath.split(path.sep);
+	for (let i = 4; i <= parts.length; i++) {
+	  const currentPath = '/' + path.join(...parts.slice(0, i));
+	  console.log('Checking DIR: ', currentPath)
+	  if (!fs.existsSync(currentPath)) {
+		console.log('Making DIR: ', currentPath)
+		fs.mkdirSync(currentPath);
+	  }
+	}
+  }
 
 function sumValues(obj) {
 	let total = 0;
@@ -68,7 +82,7 @@ async function handleCall(url, request) {
 	const goerli = new ethers.providers.AlchemyProvider("goerli", process.env.ALCHEMY_KEY_GOERLI)
 	let paths = url.toLowerCase().split('/');
 	let nature = paths[paths.length - 1]
-	// @dev: if gas call
+	/// If gas call
 	if (nature === 'gas') {
 		let response = {
 			gas: '0'
@@ -97,12 +111,13 @@ async function handleCall(url, request) {
 		});
 		return JSON.stringify(response)
 	}
-	// @dev : remaining calls
+	/// Remaining calls
 	let ens = request.ens;
 	let chain = request.chain;
 	let caip10 = 'eip155-' + chain + '-' + ens
 	let address = request.address;
 	let writePath = '.well-known/' + ens.split(".").reverse().join("/")
+	// If 
 	if (nature === 'read') {
 		let response = {
 			...EMPTY_STRING,
@@ -168,9 +183,16 @@ async function handleCall(url, request) {
 				recordsFiles[i] = recordsTypes[i]
 			}
 			let promise = new Promise((resolve, reject) => {
+				// Make strict directory structure for TYPES[]
 				if (!fs.existsSync(`/root/ccip2-data/${caip10}/${writePath}/`)) {
-					fs.mkdirSync(`/root/ccip2-data/${caip10}/${writePath}/`);
+					mkdirpSync(`/root/ccip2-data/${caip10}/${writePath}/`);
 				}
+				// Make further sub-directories when needed in FILES[]
+				let subRepo = path.dirname(`/root/ccip2-data/${caip10}/${writePath}/${recordsFiles[i]}.json`)
+				if (!fs.existsSync(subRepo)) {
+					fs.mkdirSync(subRepo)
+				}
+				// Write record
 				fs.writeFile(`/root/ccip2-data/${caip10}/${writePath}/${recordsFiles[i]}.json`, 
 					// TODO - encode response with signature
 					JSON.stringify(
