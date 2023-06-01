@@ -101,7 +101,6 @@ async function handleCall(url, request) {
 	let ens = request.ens;
 	let chain = request.chain;
 	let caip10 = 'eip155-' + chain + '-' + ens
-	let signature = request.signature;
 	let address = request.address;
 	let writePath = '.well-known/' + ens.split(".").reverse().join("/")
 	if (nature === 'read') {
@@ -154,6 +153,7 @@ async function handleCall(url, request) {
 		// @TODO: Signature record
 		let recordsTypes = request.recordsTypes;
 		let recordsValues = request.recordsValues;
+		let signatures = request.signatures;
 		let promises = []
 		let recordsFiles = recordsTypes;
 		for (let i = 0; i < recordsTypes.length; i++) {
@@ -179,7 +179,7 @@ async function handleCall(url, request) {
 							timetamp: Date.now(),
 							signer: address,
 							domain: ens,
-							signature: signature
+							signature: signatures[i]
 						}
 					), (err) => {
 						if (err) {
@@ -252,7 +252,6 @@ async function handleCall(url, request) {
 						timestamp: Date.now(),
 						signer: address,
 						domain: ens,
-						signature: signature,
 						gas: sumValues(gas).toPrecision(3)
 					}
 				), (err) => {
