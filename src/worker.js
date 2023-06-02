@@ -99,7 +99,7 @@ async function handleCall(url, request) {
 				resolve(
 					{ 
 						type: 'gas', 
-						data: _sum.toString()
+						data: _sum.toFixed(4).toString()
 					}
 				);
 			});
@@ -170,7 +170,7 @@ async function handleCall(url, request) {
 		let recordsValues = request.recordsValues;
 		let signatures = request.signatures;
 		let promises = []
-		let recordsFiles = recordsTypes;
+		let recordsFiles = [...recordsTypes];
 		for (let i = 0; i < recordsTypes.length; i++) {
 			// Set filenames for non-standard records
 			if (recordsTypes[i] === 'addr') {
@@ -242,7 +242,7 @@ async function handleCall(url, request) {
 					reject(error)
 				} else {
 					response.ipns = 'ipns://' + ipns
-					console.log('Successfully Pinned:', ipns)
+					console.log(`Successfully Pinned: ipfs://${ipfsCid} To: ipns://${ipns}`)
 					console.log('Making Database Entry...')
 					connection.query(
 						'INSERT INTO events (ens, timestamp, ipfs, ipns, revision, gas, meta) VALUES (?, ?, ?, ?, ?, ?, ?)',
