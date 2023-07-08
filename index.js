@@ -1,21 +1,21 @@
 import {
   Worker
-} from 'worker_threads';
-import { ethers } from 'ethers';
-import 'isomorphic-fetch';
-import { createRequire } from 'module';
-import cors from 'cors';
-import fs from 'fs';
-import https from 'https';
-const require = createRequire(import.meta.url);
-require('dotenv').config();
-const crypto = require("crypto");
-const express = require("express");
-const process = require('process');
-const key = process.env.PRIVATE_KEY;
+} from 'worker_threads'
+import { ethers } from 'ethers'
+import 'isomorphic-fetch'
+import { createRequire } from 'module'
+import cors from 'cors'
+import fs from 'fs'
+import https from 'https'
+const require = createRequire(import.meta.url)
+require('dotenv').config()
+const crypto = require("crypto")
+const express = require("express")
+const process = require('process')
+const key = process.env.PRIVATE_KEY
 const PORT = 3003
-const app = express();
-app.use(express.json());
+const app = express()
+app.use(express.json())
 app.use(
   cors(
       {
@@ -30,7 +30,7 @@ app.use(
       ],
     }
   )
-);
+)
 
 const CREATE_TABLE= `CREATE TABLE events (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -41,34 +41,35 @@ const CREATE_TABLE= `CREATE TABLE events (
   revision VARCHAR(1023) NOT NULL,
   gas VARCHAR(127) NOT NULL,
   meta JSON NOT NULL
-);`
+)`
 
 const options = {
 	 key: fs.readFileSync('/root/.ssl/sshmatrix.club.key'),
 	cert: fs.readFileSync('/root/.ssl/sshmatrix.club.crt'),
     ca: fs.readFileSync('/root/.ssl/sshmatrix.club.ca-bundle')
-};
+}
 
-const root = '/root/ccip2';
-const abi = ethers.utils.defaultAbiCoder;
+const root = '/root/ccip2'
+const abi = ethers.utils.defaultAbiCoder
+var count = 0
 const routes = ['/read', '/write', '/revision', '/gas']
 
 function errorHandler(err, req, res, next) {
   if (err instanceof SyntaxError && err.status === 400 && 'body' in err) {
-    return res.status(400).send({ error: 'Bad request' });
+    return res.status(400).send({ error: 'Bad request' })
   }
-  next();
+  next()
 }
-app.use(errorHandler);
+app.use(errorHandler)
 
 app.get('/ping', async function (request, response) {
   console.log('ping')
   // sends opaque response with error code 200 since in-browser CORS is not enabled
   response.header("Access-Control-Allow-Origin", 
     '*'
-  );
-	response.end('ccip2.eth backend is running in ' + root + ' on port ' + PORT + '\n');
-});
+  )
+	response.end('ccip2.eth backend is running in ' + root + ' on port ' + PORT + '\n')
+})
 
 app.route(routes)
   .post(async function (request, response) {
@@ -77,36 +78,38 @@ app.route(routes)
       "https://ccip2.eth.limo",
       "https://namesys-eth.github.io",
       "https://namesys.eth.limo"
-    );
-    let paths = request.url.toLowerCase().split('/');
+    )
+    let paths = request.url.toLowerCase().split('/')
     let nature = paths[paths.length - 1]
-    console.log(`Handling ${nature.toUpperCase()} Request...`)
+    count = count + 1
+    console.log(count, ':', `Handling ${nature.toUpperCase()} Request...`)
     if (!request.body || Object.keys(request.body).length === 0 || !routes.includes('/' + nature)) {
-      response.end(`Forbidden Empty ${nature.toUpperCase()} Request\n`);
+      response.end(`Forbidden Empty ${nature.toUpperCase()} Request\n`)
     } else {
-      console.log(`Parsing Legit ${nature.toUpperCase()} Request...`)
+      console.log(count, ':', `Parsing Legit ${nature.toUpperCase()} Request...`)
       const worker = new Worker(root + '/src/worker.js', {
         workerData: {
             url: request.url,
-            body: JSON.stringify(request.body)
+            body: JSON.stringify(request.body),
+            iterator: count
         }
-      });
+      })
       worker.on("message", _response => {
-        console.log(`Worker answering ${nature.toUpperCase()}...`)
-        response.status(200);  // 200: SUCCESS
-        response.json({ response: JSON.parse(_response) }).end();
-      });
+        console.log(count, ':', `Worker answering ${nature.toUpperCase()}...`)
+        response.status(200)  // 200: SUCCESS
+        response.json({ response: JSON.parse(_response) }).end()
+      })
       worker.on("error", _error => {
-        console.log(`Worker error in ${nature.toUpperCase()}...`)
-        console.error(_error);
-        response.status(407);  // 407: INTERNAL_ERROR
-        response.json({ response: null }).end();
-      });
+        console.log(count, ':', `Worker error in ${nature.toUpperCase()}...`)
+        console.error(_error)
+        response.status(407)  // 407: INTERNAL_ERROR
+        response.json({ response: null }).end()
+      })
       worker.on("exit", () => {
-        console.log(`Worker quitting after ${nature.toUpperCase()}...`)
-      });
+        console.log(count, ':', `Worker quitting after ${nature.toUpperCase()}...`)
+      })
     }
-});
+})
 
-console.log('ccip2.eth backend is running in ' + root + ' on port ' + PORT);
-https.createServer(options, app).listen(PORT);
+console.log('ccip2.eth backend is running in ' + root + ' on port ' + PORT)
+https.createServer(options, app).listen(PORT)
