@@ -156,17 +156,20 @@ async function handleCall(url, request, iterator) {
 			/* Do nothing */
 		}
 	} else if (nature === 'write') {
+		let timestamp = Date.now() / 1000
 		let response = {
 			...EMPTY_STRING,
 			type: nature,
 			ipfs: '',
 			ipns: '',
-			meta: EMPTY_BOOL
+			meta: EMPTY_BOOL,
+			timestamp: timestamp
 		}
 		let ipns = request.ipns
 		// @TODO: Signature record
 		let recordsTypes = request.recordsTypes
 		let recordsValues = request.recordsValues
+		let recordsRaw = request.recordsRaw
 		let signatures = request.signatures
 		let promises = []
 		let recordsFiles = [...recordsTypes]
@@ -193,10 +196,11 @@ async function handleCall(url, request, iterator) {
 					JSON.stringify(
 						{
 							data: recordsValues[recordsTypes[i]],
-							timetamp: Date.now(),
+							raw: recordsRaw[recordsTypes[i]],
+							timetamp: timestamp,
 							signer: address,
 							domain: ens,
-							signature: signatures[i]
+							signature: signatures[recordsTypes[i]]
 						}
 					), (err) => {
 						if (err) {
@@ -204,7 +208,7 @@ async function handleCall(url, request, iterator) {
 							reject(err)
 						} else {
 							response.meta[recordsTypes[i]] = true
-							response[recordsTypes[i]] = recordsValues[recordsTypes[i]]
+							response[recordsTypes[i]] = recordsRaw[recordsTypes[i]]
 							console.log(iterator, ':', 'Successfully Wrote Record:', `${recordsFiles[i]}`)
 							resolve()
 						}
@@ -225,7 +229,6 @@ async function handleCall(url, request, iterator) {
 					const lines = stdout.trim().split('\n');
 					const secondLastLine = lines[lines.length - 1];
 					ipfsCid = secondLastLine.split(' ')[1]
-					response[recordsTypes] = recordsValues[recordsTypes]
 					response.ipfs = 'ipfs://' + ipfsCid
 					resolve()
 					//let pinCmd = `ipfs pin add ${stdout.split(' ')[1]} && ipfs pin add ${ipns}`
@@ -246,7 +249,7 @@ async function handleCall(url, request, iterator) {
 					console.log(iterator, ':', 'Making Database Entry...')
 					connection.query(
 						'INSERT INTO events (ens, timestamp, ipfs, ipns, revision, gas, meta) VALUES (?, ?, ?, ?, ?, ?, ?)',
-						[ens, Date.now(), response.ipfs, response.ipns, '0x0', '0', JSON.stringify(response.meta)],
+						[ens, timestamp, response.ipfs, response.ipns, '0x0', '0', JSON.stringify(response.meta)],
 						(error, results, fields) => {
 							if (error) {
 								console.error('Error executing database entry:', error)
@@ -273,7 +276,7 @@ async function handleCall(url, request, iterator) {
 				JSON.stringify(
 					{
 						data: revision,
-						timestamp: Date.now(),
+						timestamp: request.timestamp,
 						signer: address,
 						domain: ens,
 						gas: sumValues(gas).toPrecision(3)
