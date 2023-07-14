@@ -114,13 +114,14 @@ async function handleCall(url, request, iterator) {
 	let ens = request.ens
 	let chain = request.chain
 	let caip10 = 'eip155-' + chain + '-' + ens
-	let address = request.address
+	let owner = request.owner
 	let writePath = '.well-known/' + ens.split(".").reverse().join("/")
 	// If 
 	if (nature === 'read') {
 		let response = {
 			...EMPTY_STRING,
-			type: nature
+			type: nature,
+			timestamp: {...EMPTY_STRING}
 		}
 		let recordsTypes = request.recordsTypes
 		let recordsValues = request.recordsValues
@@ -137,7 +138,8 @@ async function handleCall(url, request, iterator) {
 								resolve(
 									{
 										type: types[i],
-										data: cache.data
+										data: cache.raw,
+										timestamp: cache.timestamp
 									}
 								)
 							}
@@ -149,28 +151,30 @@ async function handleCall(url, request, iterator) {
 			let results = await Promise.all(promises)
 			results.forEach(result => {
 				response[result.type] = result.data
+				response.timestamp[result.type] = result.timestamp
 			})
-			//console.log(iterator, ':', 'Worker Read Response:', response)
+			//console.log('Worker Read Response:', response)
 			return JSON.stringify(response)
 		} else {
 			/* Do nothing */
 		}
 	} else if (nature === 'write') {
-		let timestamp = Date.now() / 1000
+		let timestamp = Math.round(Date.now() / 1000)
 		let response = {
 			...EMPTY_STRING,
 			type: nature,
 			ipfs: '',
 			ipns: '',
 			meta: EMPTY_BOOL,
-			timestamp: timestamp
+			timestamp: {...EMPTY_STRING}
 		}
 		let ipns = request.ipns
-		// @TODO: Signature record
 		let recordsTypes = request.recordsTypes
 		let recordsValues = request.recordsValues
 		let recordsRaw = request.recordsRaw
 		let signatures = request.signatures
+		let manager = request.manager
+		let managerSig = request.managerSignature
 		let promises = []
 		let recordsFiles = [...recordsTypes]
 		for (let i = 0; i < recordsTypes.length; i++) {
@@ -192,15 +196,16 @@ async function handleCall(url, request, iterator) {
 				}
 				// Write record
 				fs.writeFile(`/root/ccip2-data/${caip10}/${writePath}/${recordsFiles[i]}.json`,
-					// TODO - encode response with signature
 					JSON.stringify(
 						{
+							domain: ens,
 							data: recordsValues[recordsTypes[i]],
 							raw: recordsRaw[recordsTypes[i]],
-							timetamp: timestamp,
-							signer: address,
-							domain: ens,
-							signature: signatures[recordsTypes[i]]
+							timestamp: timestamp,
+							signer: manager,
+							owner: owner,
+							managerSignature: managerSig,
+							recordSignature: signatures[recordsTypes[i]]
 						}
 					), (err) => {
 						if (err) {
@@ -209,6 +214,7 @@ async function handleCall(url, request, iterator) {
 						} else {
 							response.meta[recordsTypes[i]] = true
 							response[recordsTypes[i]] = recordsRaw[recordsTypes[i]]
+							response.timestamp[recordsTypes[i]] = timestamp
 							console.log(iterator, ':', 'Successfully Wrote Record:', `${recordsFiles[i]}`)
 							resolve()
 						}
@@ -270,15 +276,19 @@ async function handleCall(url, request, iterator) {
 		let revision = request.revision
 		let version = JSON.parse(request.version.replace('\\', ''))
 		let gas = JSON.parse(request.gas)
+		let manager = request.manager
+		let managerSig = request.managerSignature
 		let promise = new Promise((resolve, reject) => {
 			// Decoded version metadata utilised by NameSys
 			fs.writeFile(`/root/ccip2-data/${caip10}/revision.json`,
 				JSON.stringify(
 					{
+						domain: ens,
 						data: revision,
 						timestamp: request.timestamp,
-						signer: address,
-						domain: ens,
+						signer: manager,
+						owner: owner,	
+						managerSignature: managerSig,
 						gas: sumValues(gas).toPrecision(3)
 					}
 				), (err) => {
