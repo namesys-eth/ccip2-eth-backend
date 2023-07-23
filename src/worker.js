@@ -255,7 +255,7 @@ async function handleCall(url, request, iterator) {
 					console.log(iterator, ':', 'Making Database Entry...')
 					connection.query(
 						'INSERT INTO events (ens, timestamp, ipfs, ipns, revision, gas, meta) VALUES (?, ?, ?, ?, ?, ?, ?)',
-						[ens, timestamp, response.ipfs, response.ipns, '0x0', '0', JSON.stringify(response.meta)],
+						[caip10, timestamp, response.ipfs, response.ipns, '0x0', '0', JSON.stringify(response.meta)],
 						(error, results, fields) => {
 							if (error) {
 								console.error('Error executing database entry:', error)
@@ -299,7 +299,7 @@ async function handleCall(url, request, iterator) {
 						let _revision = new Uint8Array(Object.values(revision)).toString('utf-8')
 						connection.query(
 							`UPDATE events SET revision = ?, gas = ? WHERE ens = ? AND revision = '0x0' AND gas = '0'`,
-							[_revision, sumValues(gas).toPrecision(3).toString(), ens],
+							[_revision, sumValues(gas).toPrecision(3).toString(), caip10],
 							(error, results, fields) => {
 								if (error) {
 									console.error('Error executing database revision:', error)

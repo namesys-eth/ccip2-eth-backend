@@ -23,7 +23,9 @@ app.use(
          "http://localhost:3000",
          "https://ccip2.eth.limo",
          "https://namesys-eth.github.io",
-         "https://namesys.eth.limo"
+         "https://namesys.eth.limo",
+         "https://testnet.bensyc.eth.limo",
+         "https://namesys.xyz"
       ],
       headers: [
       'Content-Type',
@@ -74,10 +76,11 @@ app.get('/ping', async function (request, response) {
 app.route(routes)
   .post(async function (request, response) {
     response.header("Access-Control-Allow-Origin",
-      "http://localhost:3000",
       "https://ccip2.eth.limo",
       "https://namesys-eth.github.io",
-      "https://namesys.eth.limo"
+      "https://namesys.eth.limo",
+      "https://testnet.bensyc.eth.limo",
+      "https://namesys.xyz"
     )
     let paths = request.url.toLowerCase().split('/')
     let nature = paths[paths.length - 1]
