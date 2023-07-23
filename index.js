@@ -20,12 +20,10 @@ app.use(
   cors(
       {
       origin: [
-         "http://localhost:3000",
          "https://ccip2.eth.limo",
-         "https://namesys-eth.github.io",
          "https://namesys.eth.limo",
-         "https://testnet.bensyc.eth.limo",
-         "https://namesys.xyz"
+         "https://namesys.xyz",
+         "https://namesys-eth.github.io"
       ],
       headers: [
       'Content-Type',
@@ -77,10 +75,9 @@ app.route(routes)
   .post(async function (request, response) {
     response.header("Access-Control-Allow-Origin",
       "https://ccip2.eth.limo",
-      "https://namesys-eth.github.io",
       "https://namesys.eth.limo",
-      "https://testnet.bensyc.eth.limo",
-      "https://namesys.xyz"
+      "https://namesys.xyz",
+      "https://namesys-eth.github.io"
     )
     let paths = request.url.toLowerCase().split('/')
     let nature = paths[paths.length - 1]

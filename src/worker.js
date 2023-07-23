@@ -60,6 +60,8 @@ for (const key of types) {
 	EMPTY_BOOL[key] = false
 }
 
+const Launch = '1690120000' 
+
 const connection = mysql.createConnection({
 	host: process.env.MYSQL_HOST,
 	user: process.env.MYSQL_USER,
@@ -86,7 +88,7 @@ async function handleCall(url, request, iterator) {
 		}
 		let promises = []
 		let promise = new Promise((resolve, reject) => {
-			connection.query('SELECT gas FROM events', function (error, results, fields) {
+			connection.query(`SELECT gas FROM events WHERE timestamp > ${Launch}`, function (error, results, fields) {
 				if (error) {
 					console.error('Error reading gas from database:', error)
 					return
@@ -299,7 +301,7 @@ async function handleCall(url, request, iterator) {
 						let _revision = new Uint8Array(Object.values(revision)).toString('utf-8')
 						connection.query(
 							`UPDATE events SET revision = ?, gas = ? WHERE ens = ? AND revision = '0x0' AND gas = '0'`,
-							[_revision, sumValues(gas).toPrecision(3).toString(), caip10],
+							[_revision, chain === '1' ? sumValues(gas).toPrecision(3).toString() : '0.000', caip10],
 							(error, results, fields) => {
 								if (error) {
 									console.error('Error executing database revision:', error)
