@@ -16,15 +16,18 @@ const key = process.env.PRIVATE_KEY
 const PORT = 3003
 const app = express()
 app.use(express.json())
+
+const CORS = [
+  "https://ccip2.eth.limo",
+  "https://namesys.eth.limo",
+  "https://namesys.xyz",
+  "https://namesys-eth.github.io"
+]
+
 app.use(
   cors(
       {
-      origin: [
-         "https://ccip2.eth.limo",
-         "https://namesys.eth.limo",
-         "https://namesys.xyz",
-         "https://namesys-eth.github.io"
-      ],
+      origin: CORS,
       headers: [
       'Content-Type',
       ],
@@ -74,10 +77,7 @@ app.get('/ping', async function (request, response) {
 app.route(routes)
   .post(async function (request, response) {
     response.header("Access-Control-Allow-Origin",
-      "https://ccip2.eth.limo",
-      "https://namesys.eth.limo",
-      "https://namesys.xyz",
-      "https://namesys-eth.github.io"
+      CORS[0], CORS[1], CORS[2], CORS[3], CORS[4]
     )
     let paths = request.url.toLowerCase().split('/')
     let nature = paths[paths.length - 1]
