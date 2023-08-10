@@ -127,6 +127,35 @@ async function handleCall(url, request, iterator) {
 		}
 		let recordsTypes = request.recordsTypes
 		let recordsValues = request.recordsValues
+		let ownerhash = request.ownerhash
+		// Get Ownerhash timestamps
+		if (ownerhash !== '0x0') {
+			let promises = []
+			let promise = new Promise((resolve, reject) => {
+				connection.query(`SELECT timestamp FROM events WHERE ipns = '${ownerhash}'`, function (error, results, fields) {
+					if (error) {
+						console.error('Error reading ownerhash from database:', error)
+						return
+					}
+					const _values = results.map(row => row['timestamp'])
+					resolve(
+						{
+							type: 'ownerstamp',
+							data: _values
+						}
+					)
+				})
+				console.log(iterator, ':', 'Closing MySQL Connection')
+				connection.end()
+			})
+			promises.push(promise)
+			let results = await Promise.all(promises)
+			results.forEach(result => {
+				response[result.type] = result.data
+			})
+		} else {
+			response['ownerstamp'] = []
+		}
 		if (recordsTypes === 'all' && recordsValues === 'all') {
 			let promises = []
 			for (let i = 0; i < 4; i++) {
