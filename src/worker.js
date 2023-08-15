@@ -128,8 +128,9 @@ async function handleCall(url, request, iterator) {
 		let recordsTypes = request.recordsTypes
 		let recordsValues = request.recordsValues
 		let ownerhash = request.ownerhash
+		let hashType = request.hashType
 		// Get Ownerhash timestamps
-		if (ownerhash !== '0x0') {
+		if (ownerhash) {
 			let promises = []
 			let promise = new Promise((resolve, reject) => {
 				connection.query(`SELECT timestamp FROM events WHERE ipns = '${ownerhash}'`, function (error, results, fields) {
@@ -155,6 +156,10 @@ async function handleCall(url, request, iterator) {
 			})
 		} else {
 			response['ownerstamp'] = []
+		}
+		// Update CAIP-10 for Ownerhash
+		if (hashType === 'ownerhash') {
+			caip10 = 'eip155-' + chain + '-' + owner
 		}
 		if (recordsTypes === 'all' && recordsValues === 'all') {
 			let promises = []
@@ -208,6 +213,11 @@ async function handleCall(url, request, iterator) {
 		let managerSig = request.managerSignature
 		let promises = []
 		let recordsFiles = [...recordsTypes]
+		let hashType = request.hashType
+		// Update CAIP-10 for Ownerhash
+		if (hashType === 'ownerhash') {
+			caip10 = 'eip155-' + chain + '-' + manager
+		}
 		for (let i = 0; i < recordsTypes.length; i++) {
 			// Set filenames for non-standard records
 			recordsFiles[i] = files[types.indexOf(recordsTypes[i])]
