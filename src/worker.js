@@ -216,7 +216,7 @@ async function handleCall(url, request, iterator) {
 		let hashType = request.hashType
 		// Update CAIP-10 for Ownerhash
 		if (hashType === 'ownerhash') {
-			caip10 = 'eip155-' + chain + '-' + manager
+			caip10 = 'eip155-' + chain + '-' + owner
 		}
 		for (let i = 0; i < recordsTypes.length; i++) {
 			// Set filenames for non-standard records
@@ -319,6 +319,11 @@ async function handleCall(url, request, iterator) {
 		let gas = JSON.parse(request.gas)
 		let manager = request.manager
 		let managerSig = request.managerSignature
+		let hashType = request.hashType
+		// Update CAIP-10 for Ownerhash
+		if (hashType === 'ownerhash') {
+			caip10 = 'eip155-' + chain + '-' + owner
+		}
 		let promise = new Promise((resolve, reject) => {
 			// Decoded version metadata utilised by NameSys
 			fs.writeFile(`/root/ccip2-data/${caip10}/revision.json`,
