@@ -21,8 +21,7 @@ const CORS = [
   "https://ccip2.eth.limo",
   "https://namesys.eth.limo",
   "https://namesys.xyz",
-  "https://namesys-eth.github.io",
-  "http://localhost:3000"
+  "https://namesys-eth.github.io"
 ]
 
 app.use(
@@ -48,9 +47,9 @@ const CREATE_TABLE= `CREATE TABLE events (
 )`
 
 const options = {
-	 key: fs.readFileSync('/root/.ssl/sshmatrix.club.key'),
-	cert: fs.readFileSync('/root/.ssl/sshmatrix.club.crt'),
-    ca: fs.readFileSync('/root/.ssl/sshmatrix.club.ca-bundle')
+	 key: fs.readFileSync('/etc/letsencrypt/live/ipfs.namesys.xyz/privkey.pem'),
+	cert: fs.readFileSync('/etc/letsencrypt/live/ipfs.namesys.xyz/cert.pem'),
+    ca: [fs.readFileSync('/etc/letsencrypt/live/ipfs.namesys.xyz/chain.pem')]
 }
 
 const root = '/root/ccip2'
@@ -72,7 +71,7 @@ app.get('/ping', async function (request, response) {
   response.header("Access-Control-Allow-Origin", 
     '*'
   )
-	response.end('ccip2.eth backend is running in ' + root + ' on port ' + PORT + '\n')
+	response.end('NameSys.eth backend is running in ' + root + ' on port ' + PORT + '\n')
 })
 
 app.route(routes)
@@ -112,5 +111,5 @@ app.route(routes)
     }
 })
 
-console.log('ccip2.eth backend is running in ' + root + ' on port ' + PORT)
+console.log('NameSys.eth backend is running in ' + root + ' on port ' + PORT)
 https.createServer(options, app).listen(PORT)

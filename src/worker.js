@@ -61,6 +61,8 @@ for (const key of types) {
 }
 
 const Launch = '1690120000' 
+let _Gateway_ = '/var/www/ccip.namesys.xyz'
+const FileStore = '/root/ccip2-data'
 
 const connection = mysql.createConnection({
 	host: process.env.MYSQL_HOST,
@@ -118,7 +120,7 @@ async function handleCall(url, request, iterator) {
 	let caip10 = 'eip155-' + chain + '-' + ens
 	let owner = request.owner
 	let writePath = '.well-known/' + ens.split(".").reverse().join("/")
-	// If 
+	let Gateway = `${_Gateway_}/${chain}`
 	if (nature === 'read') {
 		let response = {
 			...EMPTY_STRING,
@@ -164,9 +166,9 @@ async function handleCall(url, request, iterator) {
 		if (recordsTypes === 'all' && recordsValues === 'all') {
 			let promises = []
 			for (let i = 0; i < 4; i++) {
-				if (fs.existsSync(`/root/ccip2-data/${caip10}/${writePath}/${files[i]}.json`)) {
+				if (fs.existsSync(`${FileStore}/${caip10}/${writePath}/${files[i]}.json`)) {
 					let promise = new Promise((resolve, reject) => {
-						fs.readFile(`/root/ccip2-data/${caip10}/${writePath}/${files[i]}.json`, function (err, data) {
+						fs.readFile(`${FileStore}/${caip10}/${writePath}/${files[i]}.json`, function (err, data) {
 							if (err) {
 								reject(err)
 							} else {
@@ -223,11 +225,14 @@ async function handleCall(url, request, iterator) {
 			recordsFiles[i] = files[types.indexOf(recordsTypes[i])]
 			let promise = new Promise((resolve, reject) => {
 				// Make strict directory structure for TYPES[]
-				if (!fs.existsSync(`/root/ccip2-data/${caip10}/${writePath}/`)) {
-					mkdirpSync(`/root/ccip2-data/${caip10}/${writePath}/`) // Make repo if it doesn't exist
+				if (!fs.existsSync(`${FileStore}/${caip10}/${writePath}/`)) {
+					mkdirpSync(`${FileStore}/${caip10}/${writePath}/`) // Make repo if it doesn't exist
+				}
+				if (!fs.existsSync(`${Gateway}/${writePath}/`)) {
+					mkdirpSync(`${Gateway}/${writePath}/`) // Make repo if it doesn't exist
 				}
 				// Make further sub-directories when needed in FILES[]
-				let subRepo = path.dirname(`/root/ccip2-data/${caip10}/${writePath}/${recordsFiles[i]}.json`)
+				let subRepo = path.dirname(`${FileStore}/${caip10}/${writePath}/${recordsFiles[i]}.json`)
 				if (!fs.existsSync(subRepo)) {
 					if (recordsFiles[i].includes('/')) {
 						mkdirpSync(subRepo) // Make repo 'parent/child' if it doesn't exist
@@ -235,37 +240,50 @@ async function handleCall(url, request, iterator) {
 						fs.mkdirSync(subRepo) // Make repo if it doesn't exist
 					}
 				}
-				// Write record
-				fs.writeFile(`/root/ccip2-data/${caip10}/${writePath}/${recordsFiles[i]}.json`,
-					JSON.stringify(
-						{
-							domain: ens,
-							data: recordsValues[recordsTypes[i]],
-							raw: recordsRaw[recordsTypes[i]],
-							timestamp: timestamp,
-							signer: manager,
-							owner: owner,
-							managerSignature: managerSig,
-							recordSignature: signatures[recordsTypes[i]]
-						}
-					), (err) => {
-						if (err) {
-							console.log(iterator, ':', 'Fatal Error During Record Writing:', err)
-							reject(err)
-						} else {
-							response.meta[recordsTypes[i]] = true
-							response[recordsTypes[i]] = recordsRaw[recordsTypes[i]]
-							response.timestamp[recordsTypes[i]] = timestamp
-							console.log(iterator, ':', 'Successfully Wrote Record:', `${recordsFiles[i]}`)
-							resolve()
-						}
+				let subGate = path.dirname(`${Gateway}/${writePath}/${recordsFiles[i]}.json`)
+				if (!fs.existsSync(subGate)) {
+					if (recordsFiles[i].includes('/')) {
+						mkdirpSync(subGate) // Make repo 'parent/child' if it doesn't exist
+					} else {
+						fs.mkdirSync(subGate) // Make repo if it doesn't exist
 					}
-				)
+				}
+				// Write record
+				[
+					`${FileStore}/${caip10}/${writePath}/${recordsFiles[i]}.json`,
+					`${Gateway}/${writePath}/${recordsFiles[i]}.json`
+				].forEach((filename) => {
+					fs.writeFile(filename,
+						JSON.stringify(
+							{
+								domain: ens,
+								data: recordsValues[recordsTypes[i]],
+								raw: recordsRaw[recordsTypes[i]],
+								timestamp: timestamp,
+								signer: manager,
+								owner: owner,
+								managerSignature: managerSig,
+								recordSignature: signatures[recordsTypes[i]]
+							}
+						), (err) => {
+							if (err) {
+								console.log(iterator, ':', 'Fatal Error During Record Writing:', err)
+								reject(err)
+							} else {
+								response.meta[recordsTypes[i]] = true
+								response[recordsTypes[i]] = recordsRaw[recordsTypes[i]]
+								response.timestamp[recordsTypes[i]] = timestamp
+								console.log(iterator, ':', 'Successfully Wrote Record:', `${recordsFiles[i]}`)
+								resolve()
+							}
+						}
+					)
+				})
 			})
 			promises.push(promise)
 		}
 		await Promise.all([promises])
-		let command = `ipfs add -r --hidden /root/ccip2-data/${caip10}`
+		let command = `ipfs add -r --hidden ${FileStore}/${caip10}`
 		let ipfsCid
 		let pinIpfs = new Promise((resolve, reject) => {
 			exec(command, (error, stdout, stderr) => {
@@ -326,50 +344,54 @@ async function handleCall(url, request, iterator) {
 		}
 		let promise = new Promise((resolve, reject) => {
 			// Decoded version metadata utilised by NameSys
-			fs.writeFile(`/root/ccip2-data/${caip10}/revision.json`,
-				JSON.stringify(
-					{
-						domain: ens,
-						data: revision,
-						timestamp: request.timestamp,
-						signer: manager,
-						owner: owner,	
-						managerSignature: managerSig,
-						gas: sumValues(gas).toPrecision(3)
+			[
+				`${FileStore}/${caip10}`
+			].forEach((filestore) => {
+				fs.writeFile(`${filestore}/revision.json`,
+					JSON.stringify(
+						{
+							domain: ens,
+							data: revision,
+							timestamp: request.timestamp,
+							signer: manager,
+							owner: owner,	
+							managerSignature: managerSig,
+							gas: sumValues(gas).toPrecision(3)
+						}
+					), (err) => {
+						if (err) {
+							reject(err)
+						} else {
+							console.log(iterator, ':', 'Making Database Revision...')
+							let _revision = new Uint8Array(Object.values(revision)).toString('utf-8')
+							connection.query(
+								`UPDATE events SET revision = ?, gas = ? WHERE ens = ? AND revision = '0x0' AND gas = '0'`,
+								[_revision, chain === '1' ? sumValues(gas).toPrecision(3).toString() : '0.000', caip10],
+								(error, results, fields) => {
+									if (error) {
+										console.error('Error executing database revision:', error)
+									}
+								})
+							console.log(iterator, ':', 'Closing MySQL Connection')
+							connection.end()
+						}
 					}
-				), (err) => {
-					if (err) {
-						reject(err)
-					} else {
-						console.log(iterator, ':', 'Making Database Revision...')
-						let _revision = new Uint8Array(Object.values(revision)).toString('utf-8')
-						connection.query(
-							`UPDATE events SET revision = ?, gas = ? WHERE ens = ? AND revision = '0x0' AND gas = '0'`,
-							[_revision, chain === '1' ? sumValues(gas).toPrecision(3).toString() : '0.000', caip10],
-							(error, results, fields) => {
-								if (error) {
-									console.error('Error executing database revision:', error)
-								}
-							})
-						console.log(iterator, ':', 'Closing MySQL Connection')
-						connection.end()
+				)
+				// Encoded version metadata required by W3Name to republish IPNS records
+				fs.writeFile(`${filestore}/version.json`,
+					JSON.stringify(
+						version
+					), (err) => {
+						if (err) {
+							reject(err)
+						} else {
+							console.log(iterator, ':', 'Making Version File...')
+							response.status = true
+							resolve()
+						}
 					}
-				}
-			)
-			// Encoded version metadata required by W3Name to republish IPNS records
-			fs.writeFile(`/root/ccip2-data/${caip10}/version.json`,
-				JSON.stringify(
-					version
-				), (err) => {
-					if (err) {
-						reject(err)
-					} else {
-						console.log(iterator, ':', 'Making Version File...')
-						response.status = true
-						resolve()
-					}
-				}
-			)
+				)
+				})
 		})
 		await Promise.all([promise])
 		return JSON.stringify(response)
