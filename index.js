@@ -95,9 +95,13 @@ app.route(routes)
         }
       })
       worker.on("message", _response => {
-        console.log(count, ':', `Worker answering ${nature.toUpperCase()}...`)
-        response.status(200)  // 200: SUCCESS
-        response.json({ response: JSON.parse(_response) }).end()
+        if (_response.type === 'log') {
+          console.log(_response.message); // Log messages from the worker
+        } else {
+          console.log(count, ':', `Worker answering ${nature.toUpperCase()}...`)
+          response.status(200)  // 200: SUCCESS
+          response.json({ response: JSON.parse(_response) }).end()
+        }
       })
       worker.on("error", _error => {
         console.log(count, ':', `Worker error in ${nature.toUpperCase()}...`)

@@ -71,6 +71,11 @@ const connection = mysql.createConnection({
 	database: process.env.MYSQL_DATABASE
 })
 
+function logMessage(message) {
+	parentPort.postMessage({ type: 'log', message });
+}
+console.log = logMessage;
+
 async function handleCall(url, request, iterator) {
 	connection.connect((err) => {
 		if (err) {
@@ -120,7 +125,7 @@ async function handleCall(url, request, iterator) {
 	let caip10 = 'eip155-' + chain + '-' + ens
 	let owner = request.owner
 	let writePath = '.well-known/' + ens.split(".").reverse().join("/")
-	let Gateway = `${_Gateway_}/${chain}`
+	let Gateway = `${_Gateway_}`
 	if (nature === 'read') {
 		let response = {
 			...EMPTY_STRING,
@@ -165,19 +170,27 @@ async function handleCall(url, request, iterator) {
 		}
 		if (recordsTypes === 'all' && recordsValues === 'all') {
 			let promises = []
-			for (let i = 0; i < 4; i++) {
-				if (fs.existsSync(`${FileStore}/${caip10}/${writePath}/${files[i]}.json`)) {
+			let _files = [...files, 'version']
+			let _types = [...types, 'version']
+			for (let i = 0; i < _files.length; i++) {
+				let _file = ''
+				if (_types[i] === 'version') {
+					_file = `${_files[i]}`
+				} else {
+					_file = `${writePath}/${_files[i]}`
+				}
+				if (fs.existsSync(`${FileStore}/${caip10}/${_file}.json`)) {
 					let promise = new Promise((resolve, reject) => {
-						fs.readFile(`${FileStore}/${caip10}/${writePath}/${files[i]}.json`, function (err, data) {
+						fs.readFile(`${FileStore}/${caip10}/${_file}.json`, function (err, data) {
 							if (err) {
 								reject(err)
 							} else {
 								var cache = JSON.parse(data)
 								resolve(
 									{
-										type: types[i],
-										data: cache.raw,
-										timestamp: cache.timestamp
+										type: _types[i],
+										data: _types[i] === 'version' ? cache._value : cache.raw,
+										timestamp: _types[i] === 'version' ? cache._sequence : cache.timestamp
 									}
 								)
 							}
@@ -228,7 +241,7 @@ async function handleCall(url, request, iterator) {
 				if (!fs.existsSync(`${FileStore}/${caip10}/${writePath}/`)) {
 					mkdirpSync(`${FileStore}/${caip10}/${writePath}/`) // Make repo if it doesn't exist
 				}
-				if (!fs.existsSync(`${Gateway}/${writePath}/`)) {
+				if (!fs.existsSync(`${Gateway}/${writePath}/`) && chain === '1') {
 					mkdirpSync(`${Gateway}/${writePath}/`) // Make repo if it doesn't exist
 				}
 				// Make further sub-directories when needed in FILES[]
@@ -241,7 +254,7 @@ async function handleCall(url, request, iterator) {
 					}
 				}
 				let subGate = path.dirname(`${Gateway}/${writePath}/${recordsFiles[i]}.json`)
-				if (!fs.existsSync(subGate)) {
+				if (!fs.existsSync(subGate) && chain === '1') {
 					if (recordsFiles[i].includes('/')) {
 						mkdirpSync(subGate) // Make repo 'parent/child' if it doesn't exist
 					} else {
@@ -249,11 +262,34 @@ async function handleCall(url, request, iterator) {
 					}
 				}
 				// Write record
-				[
-					`${FileStore}/${caip10}/${writePath}/${recordsFiles[i]}.json`,
-					`${Gateway}/${writePath}/${recordsFiles[i]}.json`
-				].forEach((filename) => {
-					fs.writeFile(filename,
+				fs.writeFile(`${FileStore}/${caip10}/${writePath}/${recordsFiles[i]}.json`,
+					JSON.stringify(
+						{
+							domain: ens,
+							data: recordsValues[recordsTypes[i]],
+							raw: recordsRaw[recordsTypes[i]],
+							timestamp: timestamp,
+							signer: manager,
+							owner: owner,
+							managerSignature: managerSig,
+							recordSignature: signatures[recordsTypes[i]]
+						}
+					), (err) => {
+						if (err) {
+							console.log(iterator, ':', 'Fatal Error During Record Writing:', err)
+							reject(err)
+						} else {
+							response.meta[recordsTypes[i]] = true
+							response[recordsTypes[i]] = recordsRaw[recordsTypes[i]]
+							response.timestamp[recordsTypes[i]] = timestamp
+							console.log(iterator, ':', 'Successfully Wrote Record:', `${recordsFiles[i]}`)
+							resolve()
+						}
+					}
+				)
+				// Write to gateway (Mainnet Only!)
+				if (chain === '1') {
+					fs.writeFile(`${Gateway}/${writePath}/${recordsFiles[i]}.json`,
 						JSON.stringify(
 							{
 								domain: ens,
@@ -278,7 +314,7 @@ async function handleCall(url, request, iterator) {
 							}
 						}
 					)
-				})
+				}			
 			})
 			promises.push(promise)
 		}
