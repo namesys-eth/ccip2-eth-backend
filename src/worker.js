@@ -241,9 +241,11 @@ async function handleCall(url, request, iterator) {
 				if (!fs.existsSync(`${FileStore}/${caip10}/${writePath}/`)) {
 					mkdirpSync(`${FileStore}/${caip10}/${writePath}/`) // Make repo if it doesn't exist
 				}
+				/*
 				if (!fs.existsSync(`${Gateway}/${writePath}/`) && chain === '1') {
 					mkdirpSync(`${Gateway}/${writePath}/`) // Make repo if it doesn't exist
 				}
+				*/
 				// Make further sub-directories when needed in FILES[]
 				let subRepo = path.dirname(`${FileStore}/${caip10}/${writePath}/${recordsFiles[i]}.json`)
 				if (!fs.existsSync(subRepo)) {
@@ -253,6 +255,7 @@ async function handleCall(url, request, iterator) {
 						fs.mkdirSync(subRepo) // Make repo if it doesn't exist
 					}
 				}
+				/*
 				let subGate = path.dirname(`${Gateway}/${writePath}/${recordsFiles[i]}.json`)
 				if (!fs.existsSync(subGate) && chain === '1') {
 					if (recordsFiles[i].includes('/')) {
@@ -261,6 +264,7 @@ async function handleCall(url, request, iterator) {
 						fs.mkdirSync(subGate) // Make repo if it doesn't exist
 					}
 				}
+				*/
 				// Write record
 				fs.writeFile(`${FileStore}/${caip10}/${writePath}/${recordsFiles[i]}.json`,
 					JSON.stringify(
@@ -288,6 +292,7 @@ async function handleCall(url, request, iterator) {
 					}
 				)
 				// Write to gateway (Mainnet Only!)
+				/*
 				if (chain === '1') {
 					fs.writeFile(`${Gateway}/${writePath}/${recordsFiles[i]}.json`,
 						JSON.stringify(
@@ -314,7 +319,8 @@ async function handleCall(url, request, iterator) {
 							}
 						}
 					)
-				}			
+				}	
+				*/		
 			})
 			promises.push(promise)
 		}
