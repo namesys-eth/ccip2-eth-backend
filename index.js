@@ -23,7 +23,8 @@ const CORS = [
   "https://namesys.xyz",
   "https://namesys-eth.github.io",
   "https://ccip2.eth.casa",
-  "https://namesys.eth.casa"
+  "https://namesys.eth.casa",
+  "https://namesys.eth.li"
 ]
 
 app.use(
@@ -70,7 +71,7 @@ app.use(errorHandler)
 app.get('/ping', async function (request, response) {
   console.log('ping')
   // sends opaque response with error code 200 since in-browser CORS is not enabled
-  response.header("Access-Control-Allow-Origin", 
+  response.header("Access-Control-Allow-Origin",
     '*'
   )
 	response.end('NameSys.eth backend is running in ' + root + ' on port ' + PORT + '\n')

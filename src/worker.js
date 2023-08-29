@@ -134,15 +134,15 @@ async function handleCall(url, request, iterator) {
 		}
 		let recordsTypes = request.recordsTypes
 		let recordsValues = request.recordsValues
-		let ownerhash = request.ownerhash
+		let storage = request.storage
 		let hashType = request.hashType
 		// Get Ownerhash timestamps
-		if (ownerhash) {
+		if (storage) {
 			let promises = []
 			let promise = new Promise((resolve, reject) => {
-				connection.query(`SELECT timestamp FROM events WHERE ipns = '${ownerhash}'`, function (error, results, fields) {
+				connection.query(`SELECT timestamp FROM events WHERE ipns = '${storage}'`, function (error, results, fields) {
 					if (error) {
-						console.error('Error reading ownerhash from database:', error)
+						console.error('Error reading storage IPNS from database:', error)
 						return
 					}
 					const _values = results.map(row => row['timestamp'])
@@ -185,7 +185,7 @@ async function handleCall(url, request, iterator) {
 							if (err) {
 								reject(err)
 							} else {
-								var cache = JSON.parse(data)
+								let cache = JSON.parse(data)
 								resolve(
 									{
 										type: _types[i],
@@ -193,6 +193,7 @@ async function handleCall(url, request, iterator) {
 										timestamp: _types[i] === 'version' ? cache._sequence : cache.timestamp
 									}
 								)
+								cache = {}
 							}
 						})
 					})
