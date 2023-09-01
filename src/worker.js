@@ -123,7 +123,7 @@ async function handleCall(url, request, iterator) {
 	let ens = request.ens
 	let chain = request.chain
 	let caip10 = 'eip155-' + chain + '-' + ens
-	let owner = request.owner
+	let controller = request.controller
 	let writePath = '.well-known/' + ens.split(".").reverse().join("/")
 	let Gateway = `${_Gateway_}`
 	if (nature === 'read') {
@@ -166,7 +166,7 @@ async function handleCall(url, request, iterator) {
 		}
 		// Update CAIP-10 for Ownerhash
 		if (hashType === 'ownerhash') {
-			caip10 = 'eip155-' + chain + '-' + owner
+			caip10 = 'eip155-' + chain + '-' + controller
 		}
 		if (recordsTypes === 'all' && recordsValues === 'all') {
 			let promises = []
@@ -205,7 +205,6 @@ async function handleCall(url, request, iterator) {
 				response[result.type] = result.data
 				response.timestamp[result.type] = result.timestamp
 			})
-			//console.log('Worker Read Response:', response)
 			return JSON.stringify(response)
 		} else {
 			/* Do nothing */
@@ -232,7 +231,7 @@ async function handleCall(url, request, iterator) {
 		let hashType = request.hashType
 		// Update CAIP-10 for Ownerhash
 		if (hashType === 'ownerhash') {
-			caip10 = 'eip155-' + chain + '-' + owner
+			caip10 = 'eip155-' + chain + '-' + controller
 		}
 		for (let i = 0; i < recordsTypes.length; i++) {
 			// Set filenames for non-standard records
@@ -242,11 +241,6 @@ async function handleCall(url, request, iterator) {
 				if (!fs.existsSync(`${FileStore}/${caip10}/${writePath}/`)) {
 					mkdirpSync(`${FileStore}/${caip10}/${writePath}/`) // Make repo if it doesn't exist
 				}
-				/*
-				if (!fs.existsSync(`${Gateway}/${writePath}/`) && chain === '1') {
-					mkdirpSync(`${Gateway}/${writePath}/`) // Make repo if it doesn't exist
-				}
-				*/
 				// Make further sub-directories when needed in FILES[]
 				let subRepo = path.dirname(`${FileStore}/${caip10}/${writePath}/${recordsFiles[i]}.json`)
 				if (!fs.existsSync(subRepo)) {
@@ -256,16 +250,6 @@ async function handleCall(url, request, iterator) {
 						fs.mkdirSync(subRepo) // Make repo if it doesn't exist
 					}
 				}
-				/*
-				let subGate = path.dirname(`${Gateway}/${writePath}/${recordsFiles[i]}.json`)
-				if (!fs.existsSync(subGate) && chain === '1') {
-					if (recordsFiles[i].includes('/')) {
-						mkdirpSync(subGate) // Make repo 'parent/child' if it doesn't exist
-					} else {
-						fs.mkdirSync(subGate) // Make repo if it doesn't exist
-					}
-				}
-				*/
 				// Write record
 				fs.writeFile(`${FileStore}/${caip10}/${writePath}/${recordsFiles[i]}.json`,
 					JSON.stringify(
@@ -275,7 +259,7 @@ async function handleCall(url, request, iterator) {
 							raw: recordsRaw[recordsTypes[i]],
 							timestamp: timestamp,
 							signer: manager,
-							owner: owner,
+							controller: controller,
 							managerSignature: managerSig,
 							recordSignature: signatures[recordsTypes[i]]
 						}
@@ -290,38 +274,8 @@ async function handleCall(url, request, iterator) {
 							console.log(iterator, ':', 'Successfully Wrote Record:', `${recordsFiles[i]}`)
 							resolve()
 						}
-					}
+					}	
 				)
-				// Write to gateway (Mainnet Only!)
-				/*
-				if (chain === '1') {
-					fs.writeFile(`${Gateway}/${writePath}/${recordsFiles[i]}.json`,
-						JSON.stringify(
-							{
-								domain: ens,
-								data: recordsValues[recordsTypes[i]],
-								raw: recordsRaw[recordsTypes[i]],
-								timestamp: timestamp,
-								signer: manager,
-								owner: owner,
-								managerSignature: managerSig,
-								recordSignature: signatures[recordsTypes[i]]
-							}
-						), (err) => {
-							if (err) {
-								console.log(iterator, ':', 'Fatal Error During Record Writing:', err)
-								reject(err)
-							} else {
-								response.meta[recordsTypes[i]] = true
-								response[recordsTypes[i]] = recordsRaw[recordsTypes[i]]
-								response.timestamp[recordsTypes[i]] = timestamp
-								console.log(iterator, ':', 'Successfully Wrote Record:', `${recordsFiles[i]}`)
-								resolve()
-							}
-						}
-					)
-				}	
-				*/		
 			})
 			promises.push(promise)
 		}
@@ -339,7 +293,6 @@ async function handleCall(url, request, iterator) {
 					ipfsCid = secondLastLine.split(' ')[1]
 					response.ipfs = 'ipfs://' + ipfsCid
 					resolve()
-					//let pinCmd = `ipfs pin add ${stdout.split(' ')[1]} && ipfs pin add ${ipns}`
 				}
 			})
 		})
@@ -383,7 +336,7 @@ async function handleCall(url, request, iterator) {
 		let hashType = request.hashType
 		// Update CAIP-10 for Ownerhash
 		if (hashType === 'ownerhash') {
-			caip10 = 'eip155-' + chain + '-' + owner
+			caip10 = 'eip155-' + chain + '-' + controller
 		}
 		let promise = new Promise((resolve, reject) => {
 			// Decoded version metadata utilised by NameSys
@@ -397,7 +350,7 @@ async function handleCall(url, request, iterator) {
 							data: revision,
 							timestamp: request.timestamp,
 							signer: manager,
-							owner: owner,	
+							controller: controller,	
 							managerSignature: managerSig,
 							gas: sumValues(gas).toPrecision(3)
 						}

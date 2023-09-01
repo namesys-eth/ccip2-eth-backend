@@ -24,7 +24,8 @@ const CORS = [
   "https://namesys-eth.github.io",
   "https://ccip2.eth.casa",
   "https://namesys.eth.casa",
-  "https://namesys.eth.li"
+  "https://namesys.eth.li",
+  "http://localhost:3000"
 ]
 
 app.use(
