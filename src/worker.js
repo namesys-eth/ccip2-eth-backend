@@ -14,6 +14,21 @@ const process = require('process')
 const mysql = require('mysql')
 const path = require('path')
 
+// Delete directories recursively
+function deleteFolderRecursive(dirPath) {
+	if (fs.existsSync(dirPath)) {
+		fs.readdirSync(dirPath).forEach((file, index) => {
+			const curPath = path.join(dirPath, file)
+			if (fs.lstatSync(curPath).isDirectory()) {
+				deleteFolderRecursive(curPath)
+			} else {
+				fs.unlinkSync(curPath)
+			}
+		})
+		fs.rmdirSync(dirPath)
+	}
+}
+
 // Safely make directories recursively 'mkdir -p a/b/c' equivalent
 function mkdirpSync(directoryPath) {
 	const parts = directoryPath.split(path.sep)
@@ -37,19 +52,32 @@ function sumValues(obj) {
 	return total
 }
 
+function isEmpty(obj) {
+	for (let key in obj) {
+	  if (obj.hasOwnProperty(key)) {
+		return false
+	  }
+	}
+	return true
+  }
+
 const types = [
 	'addr',
 	'contenthash',
 	'avatar',
 	'zonehash',
-	'revision'
+	'revision',
+	'stealth',
+	'rsa'
 ]
 const files = [
 	'address/60',
 	'contenthash',
 	'text/avatar',
 	'dnsrecord/zonehash',
-	'revision'
+	'revision',
+	'text/stealth',
+	'text/rsa'
 ]
 const EMPTY_STRING = {}
 for (const key of types) {
@@ -60,7 +88,7 @@ for (const key of types) {
 	EMPTY_BOOL[key] = false
 }
 
-const Launch = '1690120000' 
+const Launch = '1690120000'
 let _Gateway_ = '/var/www/ccip.namesys.xyz'
 const FileStore = '/root/ccip2-data'
 
@@ -85,10 +113,10 @@ async function handleCall(url, request, iterator) {
 		console.log(iterator, ':', 'Connected to MySQL database as ID:', connection.threadId)
 	})
 	//const mainnet = new ethers.providers.AlchemyProvider("homestead", process.env.ALCHEMY_KEY_MAINNET)
-	const goerli = new ethers.providers.AlchemyProvider("goerli", process.env.ALCHEMY_KEY_GOERLI)
+	//const goerli = new ethers.providers.AlchemyProvider("goerli", process.env.ALCHEMY_KEY_GOERLI)
 	let paths = url.toLowerCase().split('/')
 	let nature = paths[paths.length - 1]
-	/// If gas call
+	/// GAS
 	if (nature === 'gas') {
 		let response = {
 			gas: '0'
@@ -126,78 +154,106 @@ async function handleCall(url, request, iterator) {
 	let controller = request.controller
 	let writePath = '.well-known/' + ens.split(".").reverse().join("/")
 	let Gateway = `${_Gateway_}`
+	/// READ
 	if (nature === 'read') {
 		let response = {
 			...EMPTY_STRING,
 			type: nature,
-			timestamp: {...EMPTY_STRING}
+			timestamp: { ...EMPTY_STRING }
 		}
 		let recordsTypes = request.recordsTypes
 		let recordsValues = request.recordsValues
 		let storage = request.storage
 		let hashType = request.hashType
-		// Get Ownerhash timestamps
-		if (storage) {
-			let promises = []
-			let promise = new Promise((resolve, reject) => {
-				connection.query(`SELECT timestamp FROM events WHERE ipns = '${storage}'`, function (error, results, fields) {
-					if (error) {
-						console.error('Error reading storage IPNS from database:', error)
-						return
-					}
-					const _values = results.map(row => row['timestamp'])
-					resolve(
-						{
-							type: 'ownerstamp',
-							data: _values
+		if (hashType !== 'gateway') {
+			/// IPNS
+			// Get Ownerhash timestamps
+			if (storage) {
+				let promises = []
+				let promise = new Promise((resolve, reject) => {
+					connection.query(`SELECT timestamp FROM events WHERE ipns = '${storage}'`, function (error, results, fields) {
+						if (error) {
+							console.error('Error reading storage IPNS from database:', error)
+							return
 						}
-					)
-				})
-				console.log(iterator, ':', 'Closing MySQL Connection')
-				connection.end()
-			})
-			promises.push(promise)
-			let results = await Promise.all(promises)
-			results.forEach(result => {
-				response[result.type] = result.data
-			})
-		} else {
-			response['ownerstamp'] = []
-		}
-		// Update CAIP-10 for Ownerhash
-		if (hashType === 'ownerhash') {
-			caip10 = 'eip155-' + chain + '-' + controller
-		}
-		if (recordsTypes === 'all' && recordsValues === 'all') {
-			let promises = []
-			let _files = [...files, 'version']
-			let _types = [...types, 'version']
-			for (let i = 0; i < _files.length; i++) {
-				let _file = ''
-				if (_types[i] === 'version') {
-					_file = `${_files[i]}`
-				} else {
-					_file = `${writePath}/${_files[i]}`
-				}
-				if (fs.existsSync(`${FileStore}/${caip10}/${_file}.json`)) {
-					let promise = new Promise((resolve, reject) => {
-						fs.readFile(`${FileStore}/${caip10}/${_file}.json`, function (err, data) {
-							if (err) {
-								reject(err)
-							} else {
-								let cache = JSON.parse(data)
-								resolve(
-									{
-										type: _types[i],
-										data: _types[i] === 'version' ? cache._value : cache.raw,
-										timestamp: _types[i] === 'version' ? cache._sequence : cache.timestamp
-									}
-								)
-								cache = {}
+						const _values = results.map(row => row['timestamp'])
+						resolve(
+							{
+								type: 'ownerstamp',
+								data: _values || []
 							}
-						})
+						)
 					})
-					promises.push(promise)
+					console.log(iterator, ':', 'Closing MySQL Connection')
+					connection.end()
+				})
+				promises.push(promise)
+				let results = await Promise.all(promises)
+				results.forEach(result => {
+					response[result.type] = result.data
+				})
+			} else {
+				response['ownerstamp'] = []
+			}
+			// Update CAIP-10 for Ownerhash
+			if (hashType === 'ownerhash') {
+				caip10 = 'eip155-' + chain + '-' + controller
+			}
+			let promises = []
+			if (recordsTypes === 'all' && recordsValues === 'all') {
+				let _files = [...files, 'version']
+				let _types = [...types, 'version']
+				for (let i = 0; i < _files.length; i++) {
+					let _file = ''
+					if (['version', 'revision'].includes(_types[i])) {
+						_file = `${_files[i]}`
+					} else {
+						_file = `${writePath}/${_files[i]}`
+					}
+					if (fs.existsSync(`${FileStore}/${caip10}/${_file}.json`)) {
+						let promise = new Promise((resolve, reject) => {
+							fs.readFile(`${FileStore}/${caip10}/${_file}.json`, function (err, data) {
+								if (err) {
+									reject(err)
+								} else {
+									let cache = JSON.parse(data)
+									resolve(
+										{
+											type: _types[i],
+											data: _types[i] === 'revision' ? cache.data : (_types[i] === 'version' ? (cache._value || '') : cache.raw),
+											timestamp: _types[i] === 'revision' ? cache.sequence : (_types[i] === 'version' ? (cache._validity || '') : cache.timestamp)
+										}
+									)
+									cache = {}
+								}
+							})
+						})
+						promises.push(promise)
+					}
+				}
+			} else if (recordsTypes !== 'all' && recordsValues === 'all') {
+				for (let i = 0; i < recordsTypes.length; i++) {
+					let _file = `${writePath}/${files[types.indexOf(recordsTypes[i])]}`
+					if (fs.existsSync(`${FileStore}/${caip10}/${_file}.json`)) {
+						let promise = new Promise((resolve, reject) => {
+							fs.readFile(`${FileStore}/${caip10}/${_file}.json`, function (err, data) {
+								if (err) {
+									reject(err)
+								} else {
+									let cache = JSON.parse(data)
+									resolve(
+										{
+											type: recordsTypes[i],
+											data: recordsTypes[i] === 'revision' ? cache.data : (recordsTypes[i] === 'version' ? (cache._value || '') : cache.raw),
+											timestamp: recordsTypes[i] === 'revision' ? cache.sequence : (recordsTypes[i] === 'version' ? (cache._validity || '') : cache.timestamp)
+										}
+									)
+									cache = {}
+								}
+							})
+						})
+						promises.push(promise)
+					}
 				}
 			}
 			let results = await Promise.all(promises)
@@ -205,10 +261,14 @@ async function handleCall(url, request, iterator) {
 				response[result.type] = result.data
 				response.timestamp[result.type] = result.timestamp
 			})
-			return JSON.stringify(response)
-		} else {
-			/* Do nothing */
+		} else if (hashType === 'gateway') {
+			/// GATEWAY
+			response['ownerstamp'] = []
+			response['version'] = ''
+			response.timestamp['version'] = ''
 		}
+		return JSON.stringify(response)
+	/// WRITE
 	} else if (nature === 'write') {
 		let timestamp = Math.round(Date.now() / 1000)
 		let response = {
@@ -217,7 +277,7 @@ async function handleCall(url, request, iterator) {
 			ipfs: '',
 			ipns: '',
 			meta: EMPTY_BOOL,
-			timestamp: {...EMPTY_STRING}
+			timestamp: { ...EMPTY_STRING }
 		}
 		let ipns = request.ipns
 		let recordsTypes = request.recordsTypes
@@ -229,167 +289,386 @@ async function handleCall(url, request, iterator) {
 		let promises = []
 		let recordsFiles = [...recordsTypes]
 		let hashType = request.hashType
-		// Update CAIP-10 for Ownerhash
-		if (hashType === 'ownerhash') {
-			caip10 = 'eip155-' + chain + '-' + controller
-		}
-		for (let i = 0; i < recordsTypes.length; i++) {
-			// Set filenames for non-standard records
-			recordsFiles[i] = files[types.indexOf(recordsTypes[i])]
-			let promise = new Promise((resolve, reject) => {
-				// Make strict directory structure for TYPES[]
-				if (!fs.existsSync(`${FileStore}/${caip10}/${writePath}/`)) {
-					mkdirpSync(`${FileStore}/${caip10}/${writePath}/`) // Make repo if it doesn't exist
-				}
-				// Make further sub-directories when needed in FILES[]
-				let subRepo = path.dirname(`${FileStore}/${caip10}/${writePath}/${recordsFiles[i]}.json`)
-				if (!fs.existsSync(subRepo)) {
-					if (recordsFiles[i].includes('/')) {
-						mkdirpSync(subRepo) // Make repo 'parent/child' if it doesn't exist
-					} else {
-						fs.mkdirSync(subRepo) // Make repo if it doesn't exist
-					}
-				}
-				// Write record
-				fs.writeFile(`${FileStore}/${caip10}/${writePath}/${recordsFiles[i]}.json`,
-					JSON.stringify(
-						{
-							domain: ens,
-							data: recordsValues[recordsTypes[i]],
-							raw: recordsRaw[recordsTypes[i]],
-							timestamp: timestamp,
-							signer: manager,
-							controller: controller,
-							managerSignature: managerSig,
-							recordSignature: signatures[recordsTypes[i]]
-						}
-					), (err) => {
+		if (hashType !== 'gateway') {
+			/// IPNS
+			// Update CAIP-10 for Ownerhash
+			if (hashType === 'ownerhash') {
+				caip10 = 'eip155-' + chain + '-' + controller
+			}
+			// Read from previous version
+			let _storage = {}
+			if (fs.existsSync(`${FileStore}/${caip10}/revision.json`)) {
+				let promises = []
+				let promise = new Promise((resolve, reject) => {
+					fs.readFile(`${FileStore}/${caip10}/revision.json`, function (err, data) {
 						if (err) {
-							console.log(iterator, ':', 'Fatal Error During Record Writing:', err)
 							reject(err)
 						} else {
-							response.meta[recordsTypes[i]] = true
-							response[recordsTypes[i]] = recordsRaw[recordsTypes[i]]
-							response.timestamp[recordsTypes[i]] = timestamp
-							console.log(iterator, ':', 'Successfully Wrote Record:', `${recordsFiles[i]}`)
-							resolve()
+							let cache = JSON.parse(data)
+							resolve(
+								{
+									type: 'ipns',
+									data: cache.ipns
+								}
+							)
+							cache = {}
 						}
-					}	
-				)
-			})
-			promises.push(promise)
-		}
-		await Promise.all([promises])
-		let command = `ipfs add -r --hidden ${FileStore}/${caip10}`
-		let ipfsCid
-		let pinIpfs = new Promise((resolve, reject) => {
-			exec(command, (error, stdout, stderr) => {
-				if (error !== null) {
-					console.log(iterator, ':', 'Fatal Error During IPFS Pinning (411):', stderr)
-					reject(error)
-				} else {
-					const lines = stdout.trim().split('\n');
-					const secondLastLine = lines[lines.length - 1];
-					ipfsCid = secondLastLine.split(' ')[1]
-					response.ipfs = 'ipfs://' + ipfsCid
-					resolve()
-				}
-			})
-		})
-		await Promise.all([pinIpfs])
-		let pinIpns = new Promise((resolve, reject) => {
-			let pinCmd = `ipfs pin add ${ipfsCid}`
-			exec(pinCmd, (error, stdout, stderr) => {
-				if (error !== null) {
-					console.log(iterator, ':', 'Fatal Error During IPFS Pinning (412):', stderr)
-					reject(error)
-				} else {
-					//console.log(iterator, ':', 'IPFS Daemon Says:', stdout)
-					response.ipns = 'ipns://' + ipns
-					console.log(iterator, ':', `Recursively Pinned: ipfs://${ipfsCid}`)
-					console.log(iterator, ':', 'Making Database Entry...')
-					connection.query(
-						'INSERT INTO events (ens, timestamp, ipfs, ipns, revision, gas, meta) VALUES (?, ?, ?, ?, ?, ?, ?)',
-						[caip10, timestamp, response.ipfs, response.ipns, '0x0', '0', JSON.stringify(response.meta)],
-						(error, results, fields) => {
-							if (error) {
-								console.error('Error executing database entry:', error)
+					})
+				})
+				promises.push(promise)
+				let _results = await Promise.all(promises)
+				_results.forEach(_result => {
+					_storage[_result.type] = _result.data
+				})
+			} else {
+				_storage['ipns'] = ipns
+			}
+			// Handle history
+			if (_storage['ipns'] !== ipns) {
+				console.log(iterator, ':', 'Purging:', `${FileStore}/${caip10}`)
+				deleteFolderRecursive(`${FileStore}/${caip10}`)
+			}
+			for (let i = 0; i < recordsTypes.length; i++) {
+				// Set filenames for non-standard records
+				recordsFiles[i] = files[types.indexOf(recordsTypes[i])]
+				let promise = new Promise((resolve, reject) => {
+					// Make strict directory structure for TYPES[]
+					let repo = `${FileStore}/${caip10}/${writePath}/`
+					if (!fs.existsSync(repo)) {
+						mkdirpSync(repo) // Make repo if it doesn't exist
+					}
+					// Make further sub-directories when needed in FILES[]
+					let subRepo = path.dirname(`${FileStore}/${caip10}/${writePath}/${recordsFiles[i]}.json`)
+					if (!fs.existsSync(subRepo)) {
+						if (recordsFiles[i].includes('/')) {
+							mkdirpSync(subRepo) // Make repo 'parent/child' if it doesn't exist
+						} else {
+							fs.mkdirSync(subRepo)
+						}
+					}
+					// Write record
+					fs.writeFile(`${FileStore}/${caip10}/${writePath}/${recordsFiles[i]}.json`,
+						JSON.stringify(
+							{
+								domain: ens,
+								data: recordsValues[recordsTypes[i]],
+								raw: recordsRaw[recordsTypes[i]],
+								timestamp: timestamp,
+								signer: manager,
+								controller: controller,
+								managerSignature: managerSig,
+								recordSignature: signatures[recordsTypes[i]]
 							}
-							resolve()
-						})
-					//console.log(iterator, ':', 'Closing MySQL Connection')
-					//connection.end()
-				}
+						), (err) => {
+							if (err) {
+								console.log(iterator, ':', 'Fatal Error During Record Writing:', err)
+								reject(err)
+							} else {
+								response.meta[recordsTypes[i]] = true
+								response[recordsTypes[i]] = recordsRaw[recordsTypes[i]]
+								response.timestamp[recordsTypes[i]] = timestamp
+								console.log(iterator, ':', 'Successfully Wrote Record:', `${recordsFiles[i]}`)
+								resolve()
+							}
+						}
+					)
+				})
+				promises.push(promise)
+			}
+			await Promise.all([promises])
+			let command = `ipfs add -r --hidden ${FileStore}/${caip10}`
+			let ipfsCid
+			let pinIpfs = new Promise((resolve, reject) => {
+				exec(command, (error, stdout, stderr) => {
+					if (error !== null) {
+						console.log(iterator, ':', 'Fatal Error During IPFS Pinning (411):', stderr)
+						reject(error)
+					} else {
+						const lines = stdout.trim().split('\n');
+						const secondLastLine = lines[lines.length - 1];
+						ipfsCid = secondLastLine.split(' ')[1]
+						response.ipfs = 'ipfs://' + ipfsCid
+						resolve()
+					}
+				})
 			})
-		})
-		await Promise.all([pinIpns])
+			await Promise.all([pinIpfs])
+			let pinIpns = new Promise((resolve, reject) => {
+				let pinCmd = `ipfs pin add ${ipfsCid}`
+				exec(pinCmd, (error, stdout, stderr) => {
+					if (error !== null) {
+						console.log(iterator, ':', 'Fatal Error During IPFS Pinning (412):', stderr)
+						reject(error)
+					} else {
+						//console.log(iterator, ':', 'IPFS Daemon Says:', stdout)
+						response.ipns = 'ipns://' + ipns
+						console.log(iterator, ':', `Recursively Pinned: ipfs://${ipfsCid}`)
+						console.log(iterator, ':', 'Making Database Entry...')
+						connection.query(
+							'INSERT INTO events (ens, timestamp, ipfs, ipns, revision, gas, meta) VALUES (?, ?, ?, ?, ?, ?, ?)',
+							[caip10, timestamp, response.ipfs, response.ipns, '0x0', '0', JSON.stringify(response.meta)],
+							(error, results, fields) => {
+								if (error) {
+									console.error('Error executing database entry:', error)
+								}
+								resolve()
+							})
+						//console.log(iterator, ':', 'Closing MySQL Connection')
+						//connection.end()
+					}
+				})
+			})
+			await Promise.all([pinIpns])
+		} else if (hashType === 'gateway') {
+			/// GATEWAY
+			let gate_ = `${Gateway}/${writePath}/`
+			let _gate = `${Gateway}/${chain}/${writePath}/`
+			if (!fs.existsSync(gate_) && chain === '1') {
+				mkdirpSync(gate_)
+			} else if (!fs.existsSync(_gate) && chain === '5') {
+				mkdirpSync(_gate)
+			}
+			for (let i = 0; i < recordsTypes.length; i++) {
+				// Set filenames for non-standard records
+				recordsFiles[i] = files[types.indexOf(recordsTypes[i])]
+				let promise = new Promise((resolve, reject) => {
+					let subGate_ = path.dirname(`${Gateway}/${writePath}/${recordsFiles[i]}.json`)
+					let _subGate = path.dirname(`${Gateway}/${chain}/${writePath}/${recordsFiles[i]}.json`)
+					if (!fs.existsSync(subGate_) && chain === '1') {
+						if (recordsFiles[i].includes('/')) {
+							mkdirpSync(subGate_)
+						} else {
+							fs.mkdirSync(subGate_)
+						}
+					} else if (!fs.existsSync(_subGate) && chain === '5') {
+						if (recordsFiles[i].includes('/')) {
+							mkdirpSync(_subGate)
+						} else {
+							fs.mkdirSync(_subGate)
+						}
+					}
+					// Write to Gateway
+					let _gateway = ''
+					if (chain === '1') {
+						_gateway = `${Gateway}/${writePath}/${recordsFiles[i]}.json`
+					} else if (chain === '5') {
+						_gateway = `${Gateway}/${chain}/${writePath}/${recordsFiles[i]}.json`
+					}
+					fs.writeFile(_gateway,
+						JSON.stringify(
+							{
+								domain: ens,
+								data: recordsValues[recordsTypes[i]],
+								raw: recordsRaw[recordsTypes[i]],
+								timestamp: timestamp,
+								signer: manager,
+								controller: controller,
+								managerSignature: managerSig,
+								recordSignature: signatures[recordsTypes[i]]
+							}
+						), (err) => {
+							if (err) {
+								console.log(iterator, ':', 'Fatal Error During Gateway Write:', err)
+								reject(err)
+							} else {
+								response.meta[recordsTypes[i]] = true
+								response[recordsTypes[i]] = recordsRaw[recordsTypes[i]]
+								response.timestamp[recordsTypes[i]] = timestamp
+								console.log(iterator, ':', 'Successfully Wrote To Gateway:', `${recordsFiles[i]}`)
+								resolve()
+							}
+						}
+					)
+				})
+				promises.push(promise)
+			}
+			await Promise.all([promises])
+			let dbEntry = new Promise((resolve, reject) => {
+				connection.query(
+					'INSERT INTO events (ens, timestamp, ipfs, ipns, revision, gas, meta) VALUES (?, ?, ?, ?, ?, ?, ?)',
+					[caip10, timestamp, '0x0', '0x0', '0x0', '0', JSON.stringify(response.meta)],
+					(error, results, fields) => {
+						if (error) {
+							console.error('Error executing database entry:', error)
+						}
+						resolve()
+					})
+			})
+			await Promise.all([dbEntry])
+		}
 		return JSON.stringify(response)
+	/// REVISION
 	} else if (nature === 'revision') {
 		let response = {
 			status: false
 		}
+		let ipns = request.ipns
+		let ipfs = request.ipfs
 		let revision = request.revision
 		let version = JSON.parse(request.version.replace('\\', ''))
 		let gas = JSON.parse(request.gas)
 		let manager = request.manager
 		let managerSig = request.managerSignature
 		let hashType = request.hashType
-		// Update CAIP-10 for Ownerhash
-		if (hashType === 'ownerhash') {
-			caip10 = 'eip155-' + chain + '-' + controller
-		}
-		let promise = new Promise((resolve, reject) => {
-			// Decoded version metadata utilised by NameSys
-			[
-				`${FileStore}/${caip10}`
-			].forEach((filestore) => {
-				fs.writeFile(`${filestore}/revision.json`,
-					JSON.stringify(
-						{
-							domain: ens,
-							data: revision,
-							timestamp: request.timestamp,
-							signer: manager,
-							controller: controller,	
-							managerSignature: managerSig,
-							gas: sumValues(gas).toPrecision(3)
-						}
-					), (err) => {
+		if (hashType !== 'gateway' && ipfs) {
+			// Update CAIP-10 for Ownerhash
+			if (hashType === 'ownerhash') {
+				caip10 = 'eip155-' + chain + '-' + controller
+			}
+			// Read from previous version
+			let _sequence = {}
+			if (fs.existsSync(`${FileStore}/${caip10}/revision.json`)) {
+				let promises = []
+				let promise = new Promise((resolve, reject) => {
+					fs.readFile(`${FileStore}/${caip10}/revision.json`, function (err, data) {
 						if (err) {
 							reject(err)
 						} else {
-							console.log(iterator, ':', 'Making Database Revision...')
-							let _revision = new Uint8Array(Object.values(revision)).toString('utf-8')
-							connection.query(
-								`UPDATE events SET revision = ?, gas = ? WHERE ens = ? AND revision = '0x0' AND gas = '0'`,
-								[_revision, chain === '1' ? sumValues(gas).toPrecision(3).toString() : '0.000', caip10],
-								(error, results, fields) => {
-									if (error) {
-										console.error('Error executing database revision:', error)
-									}
-								})
-							console.log(iterator, ':', 'Closing MySQL Connection')
-							connection.end()
+							let cache = JSON.parse(data)
+							resolve(
+								{
+									type: 'sequence',
+									data: cache.sequence
+								}
+							)
+							cache = {}
 						}
-					}
-				)
-				// Encoded version metadata required by W3Name to republish IPNS records
-				fs.writeFile(`${filestore}/version.json`,
-					JSON.stringify(
-						version
-					), (err) => {
-						if (err) {
-							reject(err)
-						} else {
-							console.log(iterator, ':', 'Making Version File...')
-							response.status = true
-							resolve()
-						}
-					}
-				)
+					})
 				})
-		})
-		await Promise.all([promise])
+				promises.push(promise)
+				let _results = await Promise.all(promises)
+				_results.forEach(_result => {
+					_sequence[_result.type] = _result.data ? String(Number(_result.data) + 1) : '0'
+				})
+			} else {
+				_sequence['sequence'] = '0'
+			}
+			let promise = new Promise((resolve, reject) => {
+				// Decoded version metadata utilised by NameSys
+				[
+					`${FileStore}/${caip10}`
+				].forEach((filestore) => {
+					fs.writeFile(`${filestore}/revision.json`,
+						JSON.stringify(
+							{
+								domain: ens,
+								data: revision,
+								timestamp: request.timestamp,
+								signer: manager,
+								controller: controller,
+								managerSignature: managerSig,
+								ipns: ipns,
+								ipfs: ipfs,
+								sequence: _sequence.sequence,
+								gas: sumValues(gas).toPrecision(3)
+							}
+						), (err) => {
+							if (err) {
+								reject(err)
+							} else {
+								console.log(iterator, ':', 'Making Database Revision...')
+								let _revision = new Uint8Array(Object.values(revision)).toString('utf-8')
+								// Update DB
+								connection.query(
+									`UPDATE events SET revision = ?, gas = ? WHERE ens = ? AND revision = '0x0' AND gas = '0'`,
+									[_revision, chain === '1' ? sumValues(gas).toPrecision(3).toString() : '0.000', caip10],
+									(error, results, fields) => {
+										if (error) {
+											console.error('Error executing database revision:', error)
+										}
+									})
+								console.log(iterator, ':', 'Closing MySQL Connection')
+								connection.end()
+							}
+						}
+					)
+					// Encoded version metadata required by W3Name to republish IPNS records
+					fs.writeFile(`${filestore}/version.json`,
+						JSON.stringify(
+							version
+						), (err) => {
+							if (err) {
+								reject(err)
+							} else {
+								console.log(iterator, ':', 'Making Version File...')
+								response.status = true
+								resolve()
+							}
+						}
+					)
+				})
+			})
+			await Promise.all([promise])
+		} else if (hashType === 'gateway' && request.timestamp && !isEmpty(gas)) {
+			// Revision file
+			let revFile_ = `${Gateway}/${writePath}/revision.json`
+			let _revFile = `${Gateway}/${chain}/${writePath}/revision.json`
+			let _sequence = {}
+			if (fs.existsSync(chain === '1' ? revFile_ : _revFile)) {
+				let promises = []
+				let promise = new Promise((resolve, reject) => {
+					fs.readFile(chain === '1' ? revFile_ : _revFile, function (err, data) {
+						if (err) {
+							reject(err)
+						} else {
+							let cache = JSON.parse(data)
+							resolve(
+								{
+									type: 'sequence',
+									data: cache.sequence
+								}
+							)
+							cache = {}
+						}
+					})
+				})
+				promises.push(promise)
+				let _results = await Promise.all(promises)
+				_results.forEach(_result => {
+					_sequence[_result.type] = _result.data ? String(Number(_result.data) + 1) : '0'
+				})
+			} else {
+				_sequence['sequence'] = '0'
+			}
+			// Update DB
+			console.log(iterator, ':', 'Updating Database...')
+			connection.query(
+				`UPDATE events SET revision = ?, gas = ? WHERE ens = ? AND revision = '0x0' AND gas = '0'`,
+				['0x0', chain === '1' ? sumValues(gas).toPrecision(3).toString() : '0.000', caip10],
+				(error, results, fields) => {
+					if (error) {
+						console.error('Error executing database update:', error)
+					}
+				})
+			// Write update
+			fs.writeFile(chain === '1' ? revFile_ : _revFile,
+			JSON.stringify(
+				{
+					domain: ens,
+					data: revision,
+					timestamp: request.timestamp,
+					signer: manager,
+					controller: controller,
+					managerSignature: managerSig,
+					ipns: ipns,
+					ipfs: ipfs,
+					sequence: _sequence.sequence,
+					gas: sumValues(gas).toPrecision(3)
+				}
+			), (err) => {
+				if (err) {
+					reject(err)
+				} else {
+					console.log(iterator, ':', 'Making Revision File...')
+					response.status = true
+					resolve()
+				}
+			}
+		)
+		} else if (['ownerhash', 'recordhash'].includes(hashType) && !request.timestamp && isEmpty(gas)) {
+			console.log(iterator, ':', 'Purging:', `${FileStore}/${caip10}`)
+			deleteFolderRecursive(`${FileStore}/${caip10}`)
+		}
 		return JSON.stringify(response)
 	}
 }
