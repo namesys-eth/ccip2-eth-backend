@@ -62,20 +62,58 @@ function isEmpty(obj) {
   }
 
 const types = [
+	// General
 	'addr',
 	'contenthash',
 	'avatar',
+	'pubkey',
+	'email',
+	// Socials
+	'github',
+	'url',
+	'twitter',
+	'discord',
+	'farcaster',
+	'nostr',
+	// Multi-addr
+	'btc',
+	'ltc',
+	'doge',
+	'sol',
+	'atom', 
+	// DNS
 	'zonehash',
+	// Extradata
 	'revision',
+	// Stealth
 	'stealth',
 	'rsa'
 ]
 const files = [
+	// General
 	'address/60',
 	'contenthash',
 	'text/avatar',
+	'pubkey',
+	'text/email',
+	// Socials
+	'text/github',
+	'text/url',
+	'text/twitter',
+	'text/discord',
+	'text/farcaster',
+	'text/nostr',
+	// Multi-addr
+	'address/0',
+	'address/2',
+	'address/3',
+	'address/501',
+	'address/118',
+	// DNS
 	'dnsrecord/zonehash',
+	// Extradata
 	'revision',
+	// Stealth
 	'text/stealth',
 	'text/rsa'
 ]
@@ -151,6 +189,7 @@ async function handleCall(url, request, iterator) {
 	let ens = request.ens
 	let chain = request.chain
 	let caip10 = 'eip155-' + chain + '-' + ens
+	let caip10ipns = caip10
 	let controller = request.controller
 	let writePath = '.well-known/' + ens.split(".").reverse().join("/")
 	let Gateway = `${_Gateway_}`
@@ -163,15 +202,15 @@ async function handleCall(url, request, iterator) {
 		}
 		let recordsTypes = request.recordsTypes
 		let recordsValues = request.recordsValues
-		let storage = request.storage
+		let ipns = request.storage.split('ipns://')[1]
 		let hashType = request.hashType
 		if (hashType !== 'gateway') {
 			/// IPNS
 			// Get Ownerhash timestamps
-			if (storage) {
+			if (ipns) {
 				let promises = []
 				let promise = new Promise((resolve, reject) => {
-					connection.query(`SELECT timestamp FROM events WHERE ipns = '${storage}'`, function (error, results, fields) {
+					connection.query(`SELECT timestamp FROM events WHERE ipns = 'ipns://${ipns}'`, function (error, results, fields) {
 						if (error) {
 							console.error('Error reading storage IPNS from database:', error)
 							return
@@ -197,7 +236,11 @@ async function handleCall(url, request, iterator) {
 			}
 			// Update CAIP-10 for Ownerhash
 			if (hashType === 'ownerhash') {
-				caip10 = 'eip155-' + chain + '-' + controller
+				caip10ipns = 'eip155-' + chain + '-' + controller + '-' + ipns
+			} else if (hashType === 'recordhash') {
+				caip10ipns = 'eip155-' + chain + '-' + ens + '-' + ipns
+			} else {
+				caip10ipns = caip10
 			}
 			let promises = []
 			if (recordsTypes === 'all' && recordsValues === 'all') {
@@ -210,9 +253,9 @@ async function handleCall(url, request, iterator) {
 					} else {
 						_file = `${writePath}/${_files[i]}`
 					}
-					if (fs.existsSync(`${FileStore}/${caip10}/${_file}.json`)) {
+					if (fs.existsSync(`${FileStore}/${caip10ipns}/${_file}.json`)) {
 						let promise = new Promise((resolve, reject) => {
-							fs.readFile(`${FileStore}/${caip10}/${_file}.json`, function (err, data) {
+							fs.readFile(`${FileStore}/${caip10ipns}/${_file}.json`, function (err, data) {
 								if (err) {
 									reject(err)
 								} else {
@@ -229,14 +272,25 @@ async function handleCall(url, request, iterator) {
 							})
 						})
 						promises.push(promise)
+					} else {
+						let promise = new Promise((resolve, reject) => {
+							resolve(
+								{
+									type: _types[i],
+									data: '',
+									timestamp: ''
+								}
+							)
+						})
+						promises.push(promise)
 					}
 				}
 			} else if (recordsTypes !== 'all' && recordsValues === 'all') {
 				for (let i = 0; i < recordsTypes.length; i++) {
 					let _file = `${writePath}/${files[types.indexOf(recordsTypes[i])]}`
-					if (fs.existsSync(`${FileStore}/${caip10}/${_file}.json`)) {
+					if (fs.existsSync(`${FileStore}/${caip10ipns}/${_file}.json`)) {
 						let promise = new Promise((resolve, reject) => {
-							fs.readFile(`${FileStore}/${caip10}/${_file}.json`, function (err, data) {
+							fs.readFile(`${FileStore}/${caip10ipns}/${_file}.json`, function (err, data) {
 								if (err) {
 									reject(err)
 								} else {
@@ -293,14 +347,18 @@ async function handleCall(url, request, iterator) {
 			/// IPNS
 			// Update CAIP-10 for Ownerhash
 			if (hashType === 'ownerhash') {
-				caip10 = 'eip155-' + chain + '-' + controller
+				caip10ipns = 'eip155-' + chain + '-' + controller + '-' + ipns
+			} else if (hashType === 'recordhash') {
+				caip10ipns = 'eip155-' + chain + '-' + ens + '-' + ipns
+			} else {
+				caip10ipns = caip10
 			}
 			// Read from previous version
 			let _storage = {}
-			if (fs.existsSync(`${FileStore}/${caip10}/revision.json`)) {
+			if (fs.existsSync(`${FileStore}/${caip10ipns}/revision.json`)) {
 				let promises = []
 				let promise = new Promise((resolve, reject) => {
-					fs.readFile(`${FileStore}/${caip10}/revision.json`, function (err, data) {
+					fs.readFile(`${FileStore}/${caip10ipns}/revision.json`, function (err, data) {
 						if (err) {
 							reject(err)
 						} else {
@@ -325,20 +383,20 @@ async function handleCall(url, request, iterator) {
 			}
 			// Handle history
 			if (_storage['ipns'] !== ipns) {
-				console.log(iterator, ':', 'Purging:', `${FileStore}/${caip10}`)
-				deleteFolderRecursive(`${FileStore}/${caip10}`)
+				console.log(iterator, ':', 'New IPNS for exisiting ENS:', `${FileStore}/${caip10ipns}`)
+				//deleteFolderRecursive()
 			}
 			for (let i = 0; i < recordsTypes.length; i++) {
 				// Set filenames for non-standard records
 				recordsFiles[i] = files[types.indexOf(recordsTypes[i])]
 				let promise = new Promise((resolve, reject) => {
 					// Make strict directory structure for TYPES[]
-					let repo = `${FileStore}/${caip10}/${writePath}/`
+					let repo = `${FileStore}/${caip10ipns}/${writePath}/`
 					if (!fs.existsSync(repo)) {
 						mkdirpSync(repo) // Make repo if it doesn't exist
 					}
 					// Make further sub-directories when needed in FILES[]
-					let subRepo = path.dirname(`${FileStore}/${caip10}/${writePath}/${recordsFiles[i]}.json`)
+					let subRepo = path.dirname(`${FileStore}/${caip10ipns}/${writePath}/${recordsFiles[i]}.json`)
 					if (!fs.existsSync(subRepo)) {
 						if (recordsFiles[i].includes('/')) {
 							mkdirpSync(subRepo) // Make repo 'parent/child' if it doesn't exist
@@ -347,7 +405,7 @@ async function handleCall(url, request, iterator) {
 						}
 					}
 					// Write record
-					fs.writeFile(`${FileStore}/${caip10}/${writePath}/${recordsFiles[i]}.json`,
+					fs.writeFile(`${FileStore}/${caip10ipns}/${writePath}/${recordsFiles[i]}.json`,
 						JSON.stringify(
 							{
 								domain: ens,
@@ -376,7 +434,7 @@ async function handleCall(url, request, iterator) {
 				promises.push(promise)
 			}
 			await Promise.all([promises])
-			let command = `ipfs add -r --hidden ${FileStore}/${caip10}`
+			let command = `ipfs add -r --hidden ${FileStore}/${caip10ipns}`
 			let ipfsCid
 			let pinIpfs = new Promise((resolve, reject) => {
 				exec(command, (error, stdout, stderr) => {
@@ -513,14 +571,18 @@ async function handleCall(url, request, iterator) {
 		if (hashType !== 'gateway' && ipfs) {
 			// Update CAIP-10 for Ownerhash
 			if (hashType === 'ownerhash') {
-				caip10 = 'eip155-' + chain + '-' + controller
+				caip10ipns = 'eip155-' + chain + '-' + controller + '-' + ipns
+			} else if (hashType === 'recordhash') {
+				caip10ipns = 'eip155-' + chain + '-' + ens + '-' + ipns
+			} else {
+				caip10ipns = caip10
 			}
 			// Read from previous version
 			let _sequence = {}
-			if (fs.existsSync(`${FileStore}/${caip10}/revision.json`)) {
+			if (fs.existsSync(`${FileStore}/${caip10ipns}/revision.json`)) {
 				let promises = []
 				let promise = new Promise((resolve, reject) => {
-					fs.readFile(`${FileStore}/${caip10}/revision.json`, function (err, data) {
+					fs.readFile(`${FileStore}/${caip10ipns}/revision.json`, function (err, data) {
 						if (err) {
 							reject(err)
 						} else {
@@ -546,7 +608,7 @@ async function handleCall(url, request, iterator) {
 			let promise = new Promise((resolve, reject) => {
 				// Decoded version metadata utilised by NameSys
 				[
-					`${FileStore}/${caip10}`
+					`${FileStore}/${caip10ipns}`
 				].forEach((filestore) => {
 					fs.writeFile(`${filestore}/revision.json`,
 						JSON.stringify(
@@ -666,8 +728,8 @@ async function handleCall(url, request, iterator) {
 			}
 		)
 		} else if (['ownerhash', 'recordhash'].includes(hashType) && !request.timestamp && isEmpty(gas)) {
-			console.log(iterator, ':', 'Purging:', `${FileStore}/${caip10}`)
-			deleteFolderRecursive(`${FileStore}/${caip10}`)
+			console.log(iterator, ':', 'New IPNS for exisiting ENS:', `${FileStore}/${caip10ipns}`)
+			//deleteFolderRecursive()
 		}
 		return JSON.stringify(response)
 	}
