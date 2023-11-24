@@ -68,10 +68,11 @@ const types = [
 	'avatar',
 	'pubkey',
 	'email',
+	'url',
 	// Socials
 	'github',
-	'url',
 	'twitter',
+	'x',
 	'discord',
 	'farcaster',
 	'nostr',
@@ -96,13 +97,14 @@ const files = [
 	'text/avatar',
 	'pubkey',
 	'text/email',
-	// Socials
-	'text/github',
 	'text/url',
-	'text/twitter',
-	'text/discord',
-	'text/farcaster',
-	'text/nostr',
+	// Socials
+	'text/com.github',
+	'text/com.twitter',
+	'text/com.x',
+	'text/com.discord',
+	'text/xyz.farcaster',
+	'address/1237',
 	// Multi-addr
 	'address/0',
 	'address/2',
