@@ -25,7 +25,8 @@ const CORS = [
   "https://ccip2.eth.casa",
   "https://namesys.eth.casa",
   "https://namesys.eth.li",
-  "http://localhost:3000"
+  "http://localhost:3000",
+  "http://localhost:3001"
 ]
 
 app.use(
@@ -81,7 +82,7 @@ app.get('/ping', async function (request, response) {
 app.route(routes)
   .post(async function (request, response) {
     response.header("Access-Control-Allow-Origin",
-      CORS[0], CORS[1], CORS[2], CORS[3], CORS[4]
+      CORS[0], CORS[1], CORS[2], CORS[3], CORS[4], CORS[5], CORS[6], CORS[7], CORS[8]
     )
     let paths = request.url.toLowerCase().split('/')
     let nature = paths[paths.length - 1]
