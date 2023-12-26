@@ -13,7 +13,7 @@ const crypto = require("crypto")
 const express = require("express")
 const process = require('process')
 const key = process.env.PRIVATE_KEY
-const PORT = 3003
+const PORT = process.env.PORT
 const app = express()
 app.use(express.json())
 
