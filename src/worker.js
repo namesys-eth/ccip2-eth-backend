@@ -34,9 +34,9 @@ function mkdirpSync(directoryPath) {
 	const parts = directoryPath.split(path.sep)
 	for (let i = 4; i <= parts.length; i++) {
 		const currentPath = '/' + path.join(...parts.slice(0, i))
-		console.log(iterator, ':', 'Checking DIR: ', currentPath)
+		console.log([iterator, ':', 'Checking DIR: ', currentPath])
 		if (!fs.existsSync(currentPath)) {
-			console.log(iterator, ':', 'Making DIR:  ', currentPath)
+			console.log([iterator, ':', 'Making DIR:  ', currentPath])
 			fs.mkdirSync(currentPath)
 		}
 	}
@@ -140,7 +140,7 @@ const connection = mysql.createConnection({
 })
 
 function logMessage(message) {
-	parentPort.postMessage({ type: 'log', message: message.join(',') });
+	parentPort.postMessage({ type: 'log', message: message.join(' ') });
 }
 console.log = logMessage;
 
@@ -150,7 +150,7 @@ async function handleCall(url, request, iterator) {
 			console.error(iterator, ':', 'Error connecting to MySQL database:', err.stack)
 			return
 		}
-		console.log(iterator, ':', 'Connected to MySQL database as ID:', connection.threadId)
+		console.log([iterator, ':', 'Connected to MySQL database as ID:', connection.threadId])
 	})
 	//const mainnet = new ethers.providers.AlchemyProvider("homestead", process.env.ALCHEMY_KEY_MAINNET)
 	//const goerli = new ethers.providers.AlchemyProvider("goerli", process.env.ALCHEMY_KEY_GOERLI)
@@ -177,7 +177,7 @@ async function handleCall(url, request, iterator) {
 					}
 				)
 			})
-			console.log(iterator, ':', 'Closing MySQL Connection')
+			console.log([iterator, ':', 'Closing MySQL Connection'])
 			connection.end()
 		})
 		promises.push(promise)
@@ -225,7 +225,7 @@ async function handleCall(url, request, iterator) {
 							}
 						)
 					})
-					console.log(iterator, ':', 'Closing MySQL Connection')
+					console.log([iterator, ':', 'Closing MySQL Connection'])
 					connection.end()
 				})
 				promises.push(promise)
@@ -385,7 +385,7 @@ async function handleCall(url, request, iterator) {
 			}
 			// Handle history
 			if (_storage['ipns'] !== ipns) {
-				console.log(iterator, ':', 'New IPNS for exisiting ENS:', `${FileStore}/${caip10ipns}`)
+				console.log([iterator, ':', 'New IPNS for exisiting ENS:', `${FileStore}/${caip10ipns}`])
 				//deleteFolderRecursive()
 			}
 			for (let i = 0; i < recordsTypes.length; i++) {
@@ -421,13 +421,13 @@ async function handleCall(url, request, iterator) {
 							}
 						), (err) => {
 							if (err) {
-								console.log(iterator, ':', 'Fatal Error During Record Writing:', err)
+								console.log([iterator, ':', 'Fatal Error During Record Writing:', err])
 								reject(err)
 							} else {
 								response.meta[recordsTypes[i]] = true
 								response[recordsTypes[i]] = recordsRaw[recordsTypes[i]]
 								response.timestamp[recordsTypes[i]] = timestamp
-								console.log(iterator, ':', 'Successfully Wrote Record:', `${recordsFiles[i]}`)
+								console.log([iterator, ':', 'Successfully Wrote Record:', `${recordsFiles[i]}`])
 								resolve()
 							}
 						}
@@ -441,7 +441,7 @@ async function handleCall(url, request, iterator) {
 			let pinIpfs = new Promise((resolve, reject) => {
 				exec(command, (error, stdout, stderr) => {
 					if (error !== null) {
-						console.log(iterator, ':', 'Fatal Error During IPFS Pinning (411):', stderr)
+						console.log([iterator, ':', 'Fatal Error During IPFS Pinning (411):', stderr])
 						reject(error)
 					} else {
 						const lines = stdout.trim().split('\n');
@@ -457,13 +457,13 @@ async function handleCall(url, request, iterator) {
 				let pinCmd = `ipfs pin add ${ipfsCid}`
 				exec(pinCmd, (error, stdout, stderr) => {
 					if (error !== null) {
-						console.log(iterator, ':', 'Fatal Error During IPFS Pinning (412):', stderr)
+						console.log([iterator, ':', 'Fatal Error During IPFS Pinning (412):', stderr])
 						reject(error)
 					} else {
 						//console.log(iterator, ':', 'IPFS Daemon Says:', stdout)
 						response.ipns = 'ipns://' + ipns
-						console.log(iterator, ':', `Recursively Pinned: ipfs://${ipfsCid}`)
-						console.log(iterator, ':', 'Making Database Entry...')
+						console.log([iterator, ':', `Recursively Pinned: ipfs://${ipfsCid}`])
+						console.log([iterator, ':', 'Making Database Entry...'])
 						connection.query(
 							'INSERT INTO events (ens, timestamp, ipfs, ipns, revision, gas, meta) VALUES (?, ?, ?, ?, ?, ?, ?)',
 							[caip10, timestamp, response.ipfs, response.ipns, '0x0', '0', JSON.stringify(response.meta)],
@@ -528,13 +528,13 @@ async function handleCall(url, request, iterator) {
 							}
 						), (err) => {
 							if (err) {
-								console.log(iterator, ':', 'Fatal Error During Gateway Write:', err)
+								console.log([iterator, ':', 'Fatal Error During Gateway Write:', err])
 								reject(err)
 							} else {
 								response.meta[recordsTypes[i]] = true
 								response[recordsTypes[i]] = recordsRaw[recordsTypes[i]]
 								response.timestamp[recordsTypes[i]] = timestamp
-								console.log(iterator, ':', 'Successfully Wrote To Gateway:', `${recordsFiles[i]}`)
+								console.log([iterator, ':', 'Successfully Wrote To Gateway:', `${recordsFiles[i]}`])
 								resolve()
 							}
 						}
@@ -630,7 +630,7 @@ async function handleCall(url, request, iterator) {
 							if (err) {
 								reject(err)
 							} else {
-								console.log(iterator, ':', 'Making Database Revision...')
+								console.log([iterator, ':', 'Making Database Revision...'])
 								let _revision = new Uint8Array(Object.values(revision)).toString('utf-8')
 								// Update DB
 								connection.query(
@@ -641,7 +641,7 @@ async function handleCall(url, request, iterator) {
 											console.error('Error executing database revision:', error)
 										}
 									})
-								console.log(iterator, ':', 'Closing MySQL Connection')
+								console.log([iterator, ':', 'Closing MySQL Connection'])
 								connection.end()
 							}
 						}
@@ -654,7 +654,7 @@ async function handleCall(url, request, iterator) {
 							if (err) {
 								reject(err)
 							} else {
-								console.log(iterator, ':', 'Making Version File...')
+								console.log([iterator, ':', 'Making Version File...'])
 								response.status = true
 								resolve()
 							}
@@ -695,7 +695,7 @@ async function handleCall(url, request, iterator) {
 				_sequence['sequence'] = '0'
 			}
 			// Update DB
-			console.log(iterator, ':', 'Updating Database...')
+			console.log([iterator, ':', 'Updating Database...'])
 			connection.query(
 				`UPDATE events SET revision = ?, gas = ? WHERE ens = ? AND revision = '0x0' AND gas = '0'`,
 				['0x0', chain === '1' ? sumValues(gas).toPrecision(3).toString() : '0.000', caip10],
@@ -723,14 +723,14 @@ async function handleCall(url, request, iterator) {
 				if (err) {
 					reject(err)
 				} else {
-					console.log(iterator, ':', 'Making Revision File...')
+					console.log([iterator, ':', 'Making Revision File...'])
 					response.status = true
 					resolve()
 				}
 			}
 		)
 		} else if (['ownerhash', 'recordhash'].includes(hashType) && !request.timestamp && isEmpty(gas)) {
-			console.log(iterator, ':', 'New IPNS for exisiting ENS:', `${FileStore}/${caip10ipns}`)
+			console.log([iterator, ':', 'New IPNS for exisiting ENS:', `${FileStore}/${caip10ipns}`])
 			//deleteFolderRecursive()
 		}
 		return JSON.stringify(response)
