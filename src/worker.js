@@ -54,12 +54,12 @@ function sumValues(obj) {
 
 function isEmpty(obj) {
 	for (let key in obj) {
-	  if (obj.hasOwnProperty(key)) {
-		return false
-	  }
+		if (obj.hasOwnProperty(key)) {
+			return false
+		}
 	}
 	return true
-  }
+}
 
 const types = [
 	// General
@@ -81,7 +81,7 @@ const types = [
 	'ltc',
 	'doge',
 	'sol',
-	'atom', 
+	'atom',
 	// DNS
 	'zonehash',
 	// Extradata
@@ -324,7 +324,7 @@ async function handleCall(url, request, iterator) {
 			response.timestamp['version'] = ''
 		}
 		return JSON.stringify(response)
-	/// WRITE
+		/// WRITE
 	} else if (nature === 'write') {
 		let timestamp = Math.round(Date.now() / 1000)
 		let response = {
@@ -557,7 +557,7 @@ async function handleCall(url, request, iterator) {
 			await Promise.all([dbEntry])
 		}
 		return JSON.stringify(response)
-	/// REVISION
+		/// REVISION
 	} else if (nature === 'revision') {
 		let response = {
 			status: false
@@ -705,30 +705,35 @@ async function handleCall(url, request, iterator) {
 					}
 				})
 			// Write update
-			fs.writeFile(chain === '1' ? revFile_ : _revFile,
-			JSON.stringify(
-				{
-					domain: ens,
-					data: revision,
-					timestamp: request.timestamp,
-					signer: manager,
-					controller: controller,
-					managerSignature: managerSig,
-					ipns: ipns,
-					ipfs: ipfs,
-					sequence: _sequence.sequence,
-					gas: sumValues(gas).toPrecision(3)
-				}
-			), (err) => {
-				if (err) {
-					reject(err)
-				} else {
-					console.log([iterator, ':', 'Making Revision File...'])
-					response.status = true
-					resolve()
-				}
-			}
-		)
+			let promises = []
+			let promise = new Promise((resolve, reject) => {
+				fs.writeFile(chain === '1' ? revFile_ : _revFile,
+					JSON.stringify(
+						{
+							domain: ens,
+							data: revision,
+							timestamp: request.timestamp,
+							signer: manager,
+							controller: controller,
+							managerSignature: managerSig,
+							ipns: ipns,
+							ipfs: ipfs,
+							sequence: _sequence.sequence,
+							gas: chain === '1' ? sumValues(gas).toPrecision(3) : '0.000'
+						}
+					), (err) => {
+						if (err) {
+							reject(err)
+						} else {
+							console.log([iterator, ':', 'Making Revision File...'])
+							response.status = true
+							resolve()
+						}
+					}
+				)
+			})
+			promises.push(promise)
+			await Promise.all(promises)
 		} else if (['ownerhash', 'recordhash'].includes(hashType) && !request.timestamp && isEmpty(gas)) {
 			console.log([iterator, ':', 'New IPNS for exisiting ENS:', `${FileStore}/${caip10ipns}`])
 			//deleteFolderRecursive()
