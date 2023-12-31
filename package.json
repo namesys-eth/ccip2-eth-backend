@@ -1,7 +1,7 @@
 {
   "name": "ccip2-eth-backend",
-  "version": "0.0.1",
-  "description": "ccip2.eth backend",
+  "version": "1.0.0-beta",
+  "description": "CCIP2.eth Backend",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
