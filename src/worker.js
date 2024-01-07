@@ -69,6 +69,7 @@ const types = [
 	'pubkey',
 	'email',
 	'url',
+	'description',
 	// Socials
 	'com.github',
 	'com.twitter',
@@ -98,6 +99,7 @@ const files = [
 	'pubkey',
 	'text/email',
 	'text/url',
+	'text/description',
 	// Socials
 	'text/com.github',
 	'text/com.twitter',
