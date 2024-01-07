@@ -1,20 +1,20 @@
-# CCIP Gateway
+# NameSys/CCIP2.eth Backend Service
 
-CCIP-Read multi-threaded HTTP gateway
+Backend support for CCIP2.eth
 
 ## Persistent node.js service with `systemctl`
 
 ### Service file
 
-- Put `istest.service.conf` in `/etc/systemd/system/`
+- Put `namesys.service.conf` in `/etc/systemd/system/`
 
 ### Service Handling
 
-- Start: `systemctl start istest.service`
-- Stop: `systemctl stop istest.service`
+- Start: `systemctl start namesys.service`
+- Stop: `systemctl stop namesys.service`
 
 ### Verify
 
-- `journalctl -u istest.service`
+- `journalctl -u namesys.service`
 
 FAQ: [Source](https://github.com/natancabral/run-nodejs-on-service-with-systemd-on-linux/)
