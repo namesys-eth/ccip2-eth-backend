@@ -838,12 +838,7 @@ async function handleCall(url, request, iterator) {
             ipns: ipns,
             ipfs: ipfs,
             sequence: _sequence.sequence,
-            gas:
-              chain === "1"
-                ? Object.keys(gas).length > 0
-                  ? sumValues(gas).toPrecision(3)
-                  : "0.000"
-                : "0.000",
+            gas: chain === "1" ? sumValues(gas).toPrecision(3) : "0.000",
           }),
           (err) => {
             if (err) {
