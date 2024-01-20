@@ -6,15 +6,15 @@ Backend support for CCIP2.eth
 
 ### Service file
 
-- Put `namesys.service.conf` in `/etc/systemd/system/`
+- Put `ccip2.service` in `/etc/systemd/system/`
 
 ### Service Handling
 
-- Start: `systemctl start namesys.service`
-- Stop: `systemctl stop namesys.service`
+- Start: `systemctl start ccip2.service`
+- Stop: `systemctl stop ccip2.service`
 
 ### Verify
 
-- `journalctl -u namesys.service`
+- `journalctl -u ccip2.service`
 
 FAQ: [Source](https://github.com/natancabral/run-nodejs-on-service-with-systemd-on-linux/)
