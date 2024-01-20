@@ -55,7 +55,7 @@ const options = {
   ca: [fs.readFileSync("/etc/letsencrypt/live/ipfs.namesys.xyz/chain.pem")],
 };
 
-const root = "/root/ccip2";
+const root = "/root/ccip2-eth/";
 const abi = ethers.utils.defaultAbiCoder;
 var count = 0;
 const routes = ["/read", "/write", "/revision", "/gas"];
