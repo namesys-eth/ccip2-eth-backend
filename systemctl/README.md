@@ -2,15 +2,15 @@
 
 ### Service file
 
-- Put `istest.service.conf` in `/etc/systemd/system/`
+- Put `ccip2.service` in `/etc/systemd/system/`
 
 ### Service Handling
 
-- Start: `systemctl start istest.service`
-- Stop: `systemctl stop istest.service`
+- Start: `systemctl start ccip2.service`
+- Stop: `systemctl stop ccip2.service`
 
 ### Verify
 
-- `journalctl -u istest.service`
+- `journalctl -u ccip2.service`
 
 FAQ: [Source](https://github.com/natancabral/run-nodejs-on-service-with-systemd-on-linux/)
